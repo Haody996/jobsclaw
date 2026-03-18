@@ -1,0 +1,182 @@
+import 'dotenv/config'
+import prisma from './lib/prisma'
+
+const jobs = [
+  {
+    externalId: 'seed-001',
+    title: 'Senior Frontend Engineer',
+    company: 'Stripe',
+    location: 'San Francisco, CA, US',
+    description: `We are looking for a Senior Frontend Engineer to join our team. You will build and maintain high-quality web applications using React, TypeScript, and Next.js. You will work closely with designers and backend engineers to deliver exceptional user experiences.\n\nRequirements:\n- 5+ years of experience with React and TypeScript\n- Strong knowledge of CSS, HTML, and web performance\n- Experience with testing frameworks (Jest, Cypress)\n- Familiarity with REST APIs and GraphQL\n- Experience with Node.js is a plus`,
+    url: 'https://stripe.com/jobs',
+    source: 'LinkedIn',
+    salary: 'USD 160,000 – 220,000 / YEAR',
+    jobType: 'FULLTIME',
+    isRemote: false,
+    postedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+  },
+  {
+    externalId: 'seed-002',
+    title: 'Full Stack Engineer',
+    company: 'Notion',
+    location: 'New York, NY, US',
+    description: `Notion is looking for a Full Stack Engineer to help build the future of productivity tools. You'll work across the stack using React, TypeScript, Node.js, and PostgreSQL.\n\nWhat you'll do:\n- Build new product features from design to deployment\n- Write clean, maintainable code with good test coverage\n- Participate in code reviews and technical discussions\n\nRequirements:\n- 3+ years of full-stack experience\n- Proficiency in React, TypeScript, Node.js\n- Experience with PostgreSQL or similar databases\n- Strong problem-solving skills`,
+    url: 'https://notion.so/jobs',
+    source: 'Indeed',
+    salary: 'USD 140,000 – 180,000 / YEAR',
+    jobType: 'FULLTIME',
+    isRemote: true,
+    postedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+  },
+  {
+    externalId: 'seed-003',
+    title: 'Backend Engineer – Payments',
+    company: 'Shopify',
+    location: 'Remote',
+    description: `Join Shopify's Payments team to build scalable backend systems that process millions of transactions daily. We use Ruby on Rails, Go, and Kafka.\n\nYou will:\n- Design and build high-throughput payment processing systems\n- Work with distributed systems and event-driven architecture\n- Ensure system reliability and performance at scale\n\nRequirements:\n- 4+ years of backend engineering experience\n- Experience with Ruby on Rails or Go\n- Knowledge of distributed systems and message queues\n- Understanding of payment systems a plus`,
+    url: 'https://shopify.com/careers',
+    source: 'Glassdoor',
+    salary: 'USD 150,000 – 200,000 / YEAR',
+    jobType: 'FULLTIME',
+    isRemote: true,
+    postedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+  },
+  {
+    externalId: 'seed-004',
+    title: 'React Native Engineer',
+    company: 'Airbnb',
+    location: 'Seattle, WA, US',
+    description: `Airbnb is hiring a React Native Engineer to build our mobile apps used by millions of hosts and guests worldwide.\n\nResponsibilities:\n- Develop and maintain React Native applications for iOS and Android\n- Collaborate with design and product teams\n- Optimize app performance and user experience\n\nRequirements:\n- 3+ years of React Native experience\n- Strong knowledge of JavaScript/TypeScript\n- Experience with native iOS or Android development\n- Understanding of mobile UX patterns`,
+    url: 'https://airbnb.com/careers',
+    source: 'LinkedIn',
+    salary: 'USD 155,000 – 195,000 / YEAR',
+    jobType: 'FULLTIME',
+    isRemote: false,
+    postedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+  },
+  {
+    externalId: 'seed-005',
+    title: 'DevOps / Platform Engineer',
+    company: 'Datadog',
+    location: 'Austin, TX, US',
+    description: `Datadog is looking for a Platform Engineer to help build and maintain our internal infrastructure and developer tooling.\n\nYou'll work on:\n- Kubernetes cluster management and scaling\n- CI/CD pipelines and deployment automation\n- Infrastructure as code with Terraform\n- Monitoring and observability tooling\n\nRequirements:\n- 3+ years of DevOps or SRE experience\n- Strong knowledge of Kubernetes and Docker\n- Experience with Terraform, Ansible, or similar IaC tools\n- Proficiency in Python or Go for automation`,
+    url: 'https://datadoghq.com/careers',
+    source: 'Indeed',
+    salary: 'USD 130,000 – 175,000 / YEAR',
+    jobType: 'FULLTIME',
+    isRemote: true,
+    postedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+  },
+  {
+    externalId: 'seed-006',
+    title: 'Machine Learning Engineer',
+    company: 'OpenAI',
+    location: 'San Francisco, CA, US',
+    description: `OpenAI is seeking a Machine Learning Engineer to work on large language models and AI safety research.\n\nResponsibilities:\n- Train and fine-tune large-scale ML models\n- Implement ML pipelines using Python and PyTorch\n- Collaborate with research scientists on novel AI systems\n- Optimize training efficiency and model performance\n\nRequirements:\n- Strong Python and PyTorch skills\n- Experience with large-scale distributed training\n- Knowledge of NLP and transformer architectures\n- MS or PhD in CS, ML, or related field preferred`,
+    url: 'https://openai.com/careers',
+    source: 'LinkedIn',
+    salary: 'USD 200,000 – 300,000 / YEAR',
+    jobType: 'FULLTIME',
+    isRemote: false,
+    postedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+  },
+  {
+    externalId: 'seed-007',
+    title: 'Frontend Engineer (Contract)',
+    company: 'Figma',
+    location: 'Remote',
+    description: `Figma is hiring a contract Frontend Engineer to help build new features for our design platform.\n\nYou'll work on:\n- Building UI components in React and TypeScript\n- Improving canvas rendering performance\n- Integrating with our REST and WebSocket APIs\n\nRequirements:\n- 3+ years React/TypeScript experience\n- Strong CSS and animation skills\n- Experience with WebGL or Canvas a plus\n- Available for 6-month contract`,
+    url: 'https://figma.com/careers',
+    source: 'Glassdoor',
+    salary: 'USD 100 – 130 / HOUR',
+    jobType: 'CONTRACTOR',
+    isRemote: true,
+    postedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+  },
+  {
+    externalId: 'seed-008',
+    title: 'Software Engineer, Infrastructure',
+    company: 'GitHub',
+    location: 'Remote',
+    description: `GitHub is looking for an Infrastructure Engineer to help scale our platform to millions of developers.\n\nWhat you'll do:\n- Build and operate distributed systems at massive scale\n- Improve reliability, performance, and security of GitHub infrastructure\n- Work with Ruby, Go, and MySQL\n\nRequirements:\n- 4+ years software engineering experience\n- Experience with large-scale distributed systems\n- Proficiency in Go or Ruby\n- Strong understanding of Linux and networking`,
+    url: 'https://github.com/careers',
+    source: 'LinkedIn',
+    salary: 'USD 145,000 – 185,000 / YEAR',
+    jobType: 'FULLTIME',
+    isRemote: true,
+    postedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+  },
+  {
+    externalId: 'seed-009',
+    title: 'iOS Engineer',
+    company: 'Spotify',
+    location: 'New York, NY, US',
+    description: `Spotify is hiring an iOS Engineer to work on our mobile listening experience.\n\nResponsibilities:\n- Build features for the Spotify iOS app in Swift\n- Collaborate with cross-functional teams across design, product, and backend\n- Write unit and integration tests\n- Participate in on-call rotations\n\nRequirements:\n- 3+ years iOS development experience\n- Proficiency in Swift\n- Experience with UIKit and SwiftUI\n- Strong understanding of iOS performance and memory management`,
+    url: 'https://spotify.com/jobs',
+    source: 'Indeed',
+    salary: 'USD 140,000 – 180,000 / YEAR',
+    jobType: 'FULLTIME',
+    isRemote: false,
+    postedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
+  },
+  {
+    externalId: 'seed-010',
+    title: 'Software Engineering Intern',
+    company: 'Meta',
+    location: 'Menlo Park, CA, US',
+    description: `Meta is looking for Software Engineering Interns to join our product teams for a 12-week summer internship.\n\nYou'll work on real projects that ship to billions of users, mentor alongside senior engineers, and learn Meta's engineering culture.\n\nRequirements:\n- Currently pursuing a BS, MS, or PhD in Computer Science\n- Strong programming skills in at least one language (Python, Java, C++, JavaScript)\n- Coursework in data structures and algorithms\n- Previous internship experience a plus`,
+    url: 'https://metacareers.com',
+    source: 'LinkedIn',
+    salary: 'USD 8,000 – 10,000 / MONTH',
+    jobType: 'INTERN',
+    isRemote: false,
+    postedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+  },
+  {
+    externalId: 'seed-011',
+    title: 'Staff Engineer, API Platform',
+    company: 'Twilio',
+    location: 'Remote',
+    description: `Twilio is looking for a Staff Engineer to lead the design and development of our next-generation API platform.\n\nYou'll:\n- Define technical direction and architecture for the API platform\n- Mentor engineers and drive engineering excellence\n- Collaborate with product and leadership on roadmap\n\nRequirements:\n- 8+ years of software engineering experience\n- Strong background in API design and distributed systems\n- Experience leading cross-team technical initiatives\n- Expertise in Java, Go, or Python`,
+    url: 'https://twilio.com/company/jobs',
+    source: 'Glassdoor',
+    salary: 'USD 200,000 – 260,000 / YEAR',
+    jobType: 'FULLTIME',
+    isRemote: true,
+    postedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+  },
+  {
+    externalId: 'seed-012',
+    title: 'Data Engineer',
+    company: 'Snowflake',
+    location: 'Denver, CO, US',
+    description: `Snowflake is hiring a Data Engineer to build and maintain data pipelines that power our analytics platform.\n\nResponsibilities:\n- Design and build scalable ETL/ELT pipelines using Python and SQL\n- Work with Snowflake, dbt, and Airflow\n- Partner with data scientists and analysts\n- Ensure data quality and reliability\n\nRequirements:\n- 3+ years data engineering experience\n- Strong SQL and Python skills\n- Experience with Snowflake or similar cloud data warehouses\n- Familiarity with dbt, Airflow, or Spark`,
+    url: 'https://snowflake.com/careers',
+    source: 'Indeed',
+    salary: 'USD 120,000 – 160,000 / YEAR',
+    jobType: 'FULLTIME',
+    isRemote: false,
+    postedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+  },
+]
+
+async function seed() {
+  console.log('Seeding jobs...')
+
+  for (const job of jobs) {
+    await prisma.job.upsert({
+      where: { externalId: job.externalId },
+      update: {},
+      create: job,
+    })
+    console.log(`  ✓ ${job.title} @ ${job.company}`)
+  }
+
+  console.log(`\nDone! Seeded ${jobs.length} jobs.`)
+  await prisma.$disconnect()
+}
+
+seed().catch((err) => {
+  console.error(err)
+  process.exit(1)
+})

@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: autoapply
+      POSTGRES_USER: autoapply
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme123}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      PORT: "8000"
+      NODE_ENV: production
+      DATABASE_URL: postgresql://autoapply:${POSTGRES_PASSWORD:-changeme123}@postgres:5432/autoapply
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - uploads:/app/server/uploads
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  sourcing-worker:
+    build: .
+    command: node dist/workers/sourcing-worker.js
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://autoapply:${POSTGRES_PASSWORD:-changeme123}@postgres:5432/autoapply
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  uploads:
