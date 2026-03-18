@@ -1,5 +1,5 @@
-const TOKEN_KEY = 'autoapply_token'
-const USER_KEY = 'autoapply_user'
+const TOKEN_KEY = 'jobsclaw_token'
+const USER_KEY = 'jobsclaw_user'
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)

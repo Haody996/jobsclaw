@@ -59,7 +59,7 @@ function buildEmailHtml(
     <!-- Footer -->
     <div style="padding:24px; background:#f8fafc; border-top:1px solid #e2e8f0;">
       <p style="margin:0; font-size:12px; color:#94a3b8; text-align:center;">
-        You're receiving this because you enabled Daily Job Digest in AutoApply.&nbsp;
+        You're receiving this because you enabled Daily Job Digest in Jobs Claw.&nbsp;
         <a href="${clientUrl}/profile" style="color:#4f46e5;">Manage preferences</a>
       </p>
     </div>

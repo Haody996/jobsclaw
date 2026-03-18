@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 export type ApplyMode = 'auto' | 'tab'
 
-const KEY = 'autoapply_mode'
+const KEY = 'jobsclaw_mode'
 
 export function useApplyMode() {
   const [mode, setModeState] = useState<ApplyMode>(() => {

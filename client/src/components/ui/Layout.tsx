@@ -25,7 +25,7 @@ export default function Layout() {
         <div className="p-6 border-b border-slate-200">
           <button onClick={() => navigate('/')} className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer">
             <Briefcase className="w-6 h-6 text-indigo-600" />
-            <span className="font-bold text-xl text-slate-900">AutoApply</span>
+            <span className="font-bold text-xl text-slate-900">Jobs Claw</span>
           </button>
           <p className="text-xs text-slate-500 mt-1">Job Application Assistant</p>
         </div>
