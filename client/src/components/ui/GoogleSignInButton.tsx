@@ -1,4 +1,5 @@
-import { GoogleLogin, CredentialResponse } from '@react-oauth/google'
+import { GoogleLogin } from '@react-oauth/google'
+import type { CredentialResponse } from '@react-oauth/google'
 import api from '../../lib/api'
 import { setToken, setUser } from '../../lib/auth'
 
