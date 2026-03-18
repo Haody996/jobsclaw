@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { Briefcase } from 'lucide-react'
 import api from '../lib/api'
 import { setToken, setUser } from '../lib/auth'
+import GoogleSignInButton from '../components/ui/GoogleSignInButton'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -81,6 +82,8 @@ export default function Login() {
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
+
+        <GoogleSignInButton onSuccess={() => navigate('/')} onError={setError} />
 
         <p className="mt-6 text-center text-sm text-slate-500">
           No account?{' '}
