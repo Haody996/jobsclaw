@@ -15,7 +15,7 @@ export async function scheduleUserDigest(userId: string, dailyEmailTime: string)
   const cron = timeToCron(dailyEmailTime)
   await sourcingQueue.upsertJobScheduler(
     `digest-${userId}`,
-    { pattern: cron, tz: 'UTC' },
+    { pattern: cron, tz: 'America/Los_Angeles' },
     { name: 'send-digest', data: { userId } }
   )
 }
@@ -36,5 +36,5 @@ export async function initScheduler(): Promise<void> {
     { name: 'refresh-jobs', data: {} }
   )
 
-  console.log(`[scheduler] Initialized — ${prefs.length} digest(s) scheduled, weekly refresh set for Tue 09:00 UTC`)
+  console.log(`[scheduler] Initialized — ${prefs.length} digest(s) scheduled, weekly refresh set for Tue 09:00 UTC (job refresh stays UTC)`)
 }

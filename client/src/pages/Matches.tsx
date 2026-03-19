@@ -298,7 +298,7 @@ export default function Matches() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1.5">Daily Email Time (UTC)</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">Daily Email Time (PST)</label>
                 <input
                   type="time"
                   value={prefForm.dailyEmailTime}

@@ -382,7 +382,7 @@ export default function Profile() {
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1.5">
-              Send Email At (UTC)
+              Send Email At (PST)
             </label>
             <input
               type="time"
