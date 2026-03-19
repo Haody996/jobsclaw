@@ -75,7 +75,7 @@ const worker = new Worker(
                 postedAt: j.job_posted_at_datetime_utc ? new Date(j.job_posted_at_datetime_utc) : null,
               },
             })
-            if (existing) updatedCount++ else newCount++
+            if (existing) { updatedCount++ } else { newCount++ }
           })
         )
 
