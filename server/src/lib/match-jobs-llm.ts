@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai'
 import type { ScrapedJob } from './scrape-linkedin'
 
 export interface JobMatch {
@@ -9,67 +9,54 @@ export interface JobMatch {
   match_rationale: string
 }
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+
+const model = genAI.getGenerativeModel({
+  model: 'gemini-2.0-flash',
+  generationConfig: {
+    responseMimeType: 'application/json',
+    responseSchema: {
+      type: SchemaType.OBJECT,
+      properties: {
+        top_matches: {
+          type: SchemaType.ARRAY,
+          minItems: 1,
+          maxItems: 5,
+          items: {
+            type: SchemaType.OBJECT,
+            properties: {
+              company: { type: SchemaType.STRING },
+              title: { type: SchemaType.STRING },
+              link: { type: SchemaType.STRING },
+              location: { type: SchemaType.STRING },
+              match_rationale: { type: SchemaType.STRING },
+            },
+            required: ['company', 'title', 'link', 'location', 'match_rationale'],
+          },
+        },
+      },
+      required: ['top_matches'],
+    },
+  },
+  systemInstruction:
+    "You are an expert technical recruiter. Analyze the candidate's resume and select the top 5 best-matching jobs from the provided list. " +
+    'For each match, write a punchy 1-2 sentence match_rationale explaining exactly why this job fits the candidate.',
+})
 
 export async function matchJobsToResume(
   resumeText: string,
   jobs: ScrapedJob[]
 ): Promise<JobMatch[]> {
-  const response = await anthropic.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 1024,
-    system:
-      "You are an expert technical recruiter. I will provide a candidate's resume text and a JSON array of recent job postings. " +
-      'Analyze the technical skills, experience level, and domain expertise in the resume, then select the top 5 best-matching jobs. ' +
-      'Return ONLY a JSON object matching the required schema. Do not include markdown formatting or conversational text.',
-    tools: [
-      {
-        name: 'select_top_matches',
-        description: 'Select the top 5 best-matching jobs for this candidate',
-        input_schema: {
-          type: 'object' as const,
-          properties: {
-            top_matches: {
-              type: 'array',
-              minItems: 1,
-              maxItems: 5,
-              items: {
-                type: 'object',
-                properties: {
-                  company: { type: 'string' },
-                  title: { type: 'string' },
-                  link: { type: 'string' },
-                  location: { type: 'string' },
-                  match_rationale: {
-                    type: 'string',
-                    description:
-                      'A punchy 1-2 sentence explanation of exactly why this job fits the candidate.',
-                  },
-                },
-                required: ['company', 'title', 'link', 'location', 'match_rationale'],
-              },
-            },
-          },
-          required: ['top_matches'],
-        },
-      },
-    ],
-    tool_choice: { type: 'tool', name: 'select_top_matches' },
-    messages: [
-      {
-        role: 'user',
-        content:
-          `Resume (first 4000 chars):\n${resumeText.slice(0, 4000)}\n\n` +
-          `Jobs (${jobs.length} total):\n${JSON.stringify(jobs)}`,
-      },
-    ],
-  })
+  const prompt =
+    `Resume (first 4000 chars):\n${resumeText.slice(0, 4000)}\n\n` +
+    `Jobs (${jobs.length} total):\n${JSON.stringify(jobs)}`
 
-  const toolUse = response.content.find((b) => b.type === 'tool_use')
-  if (!toolUse || toolUse.type !== 'tool_use') {
-    throw new Error('LLM did not return a tool_use block')
+  const result = await model.generateContent(prompt)
+  const text = result.response.text()
+
+  const parsed = JSON.parse(text) as { top_matches: JobMatch[] }
+  if (!Array.isArray(parsed.top_matches) || parsed.top_matches.length === 0) {
+    throw new Error('Gemini returned no matches')
   }
-
-  const input = toolUse.input as { top_matches: JobMatch[] }
-  return input.top_matches
+  return parsed.top_matches
 }
