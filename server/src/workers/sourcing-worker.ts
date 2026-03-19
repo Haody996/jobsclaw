@@ -1,78 +1,83 @@
 import 'dotenv/config'
-import { Worker } from 'bullmq'
+import { Worker, Job } from 'bullmq'
 import { connection } from '../lib/queue'
 import prisma from '../lib/prisma'
 import { scrapeLinkedInJobs } from '../lib/scrape-linkedin'
 import { matchJobsToResume } from '../lib/match-jobs-llm'
 import { sendDigestEmail } from '../lib/send-email'
 
+interface Progress {
+  step: string
+  percent: number
+  detail?: string
+}
+
+async function progress(job: Job, step: string, percent: number, detail?: string) {
+  const p: Progress = { step, percent, ...(detail ? { detail } : {}) }
+  await job.updateProgress(p)
+  console.log(`[sourcing-worker] [${job.id}] ${percent}% — ${step}${detail ? `: ${detail}` : ''}`)
+}
+
 const worker = new Worker(
   'job-sourcing',
   async (job) => {
     const { userId } = job.data as { userId: string }
-    console.log(`[sourcing-worker] Running digest for user ${userId}`)
 
-    // Load user + profile + preferences in one query
+    await progress(job, 'Loading your profile…', 5)
+
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: { profile: true, preference: true },
     })
 
-    if (!user) {
-      console.warn(`[sourcing-worker] User ${userId} not found — skipping`)
-      return
-    }
+    if (!user) throw new Error('User not found')
+
     if (!user.preference?.emailEnabled) {
-      console.log(`[sourcing-worker] Email disabled for user ${userId} — skipping`)
+      await progress(job, 'Skipped — digest is disabled', 100, 'Enable it in preferences')
       return
     }
     if (!user.profile?.resumeText) {
-      console.warn(`[sourcing-worker] No resume text for user ${userId} — skipping`)
+      await progress(job, 'Skipped — no resume found', 100, 'Upload your resume first')
       return
     }
 
     const { keywords, location } = user.preference
 
-    // 1. Scrape jobs
+    await progress(job, 'Scraping LinkedIn…', 20, `"${keywords}" in "${location}"`)
+
     let scraped
     try {
       scraped = await scrapeLinkedInJobs(keywords, location)
-      console.log(`[sourcing-worker] Scraped ${scraped.length} jobs for user ${userId}`)
-    } catch (err) {
-      console.error(`[sourcing-worker] Scrape failed for user ${userId}:`, err)
-      return
+    } catch (err: any) {
+      throw new Error(`LinkedIn scrape failed: ${err?.message}`)
     }
 
     if (scraped.length === 0) {
-      console.log(`[sourcing-worker] No jobs found for "${keywords}" in "${location}" — skipping email`)
+      await progress(job, 'No jobs found today', 100, 'Try different keywords or location')
       return
     }
 
-    // 2. Deduplication — filter links sent in the last 7 days
+    await progress(job, 'Filtering duplicates…', 45, `${scraped.length} jobs scraped`)
+
     const recentHistory = await prisma.jobMatchHistory.findMany({
-      where: {
-        userId,
-        runDate: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-      },
+      where: { userId, runDate: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
       select: { jobLinks: true },
     })
     const sentLinks = new Set(recentHistory.flatMap((h) => h.jobLinks))
     const freshJobs = scraped.filter((j) => !sentLinks.has(j.link))
-
-    // Fall back to all scraped jobs if not enough fresh ones
     const jobsToMatch = freshJobs.length >= 5 ? freshJobs : scraped
 
-    // 3. LLM matching via Claude
+    await progress(job, 'AI matching your resume…', 60, `Analysing ${jobsToMatch.length} jobs with Claude`)
+
     let matches
     try {
       matches = await matchJobsToResume(user.profile.resumeText, jobsToMatch)
-      console.log(`[sourcing-worker] LLM selected ${matches.length} matches for user ${userId}`)
-    } catch (err) {
-      console.error(`[sourcing-worker] LLM matching failed for user ${userId}:`, err)
-      return
+    } catch (err: any) {
+      throw new Error(`AI matching failed: ${err?.message}`)
     }
 
-    // 4. Persist history to prevent duplicates
+    await progress(job, 'Saving results…', 85, `${matches.length} top matches selected`)
+
     await prisma.jobMatchHistory.create({
       data: {
         userId,
@@ -81,7 +86,8 @@ const worker = new Worker(
       },
     })
 
-    // 5. Send digest email
+    await progress(job, 'Sending email…', 92)
+
     await sendDigestEmail(
       user.email,
       user.profile.firstName || 'there',
@@ -90,7 +96,7 @@ const worker = new Worker(
       location
     )
 
-    console.log(`[sourcing-worker] Digest sent to ${user.email}`)
+    await progress(job, 'Done! Check your inbox.', 100, `Sent ${matches.length} matches to ${user.email}`)
   },
   { connection, concurrency: 5 }
 )

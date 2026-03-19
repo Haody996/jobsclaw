@@ -24,7 +24,7 @@ export default function Profile() {
   const [autofilled, setAutofilled] = useState(false)
   const [showLinkedInPassword, setShowLinkedInPassword] = useState(false)
   const [digestSaved, setDigestSaved] = useState(false)
-  const [digestTriggered, setDigestTriggered] = useState(false)
+  const [digestJobId, setDigestJobId] = useState<string | null>(null)
   const [prefForm, setPrefForm] = useState({
     keywords: '',
     location: '',
@@ -63,9 +63,22 @@ export default function Profile() {
 
   const triggerDigest = useMutation({
     mutationFn: () => api.post('/preferences/trigger'),
-    onSuccess: () => {
-      setDigestTriggered(true)
-      setTimeout(() => setDigestTriggered(false), 4000)
+    onSuccess: ({ data }) => {
+      setDigestJobId(data.jobId)
+    },
+  })
+
+  const { data: digestProgress } = useQuery({
+    queryKey: ['digestProgress', digestJobId],
+    queryFn: async () => {
+      const { data } = await api.get(`/preferences/trigger/${digestJobId}`)
+      return data as { state: string; progress: { step: string; percent: number; detail?: string } | null }
+    },
+    enabled: !!digestJobId,
+    refetchInterval: (query) => {
+      const state = query.state.data?.state
+      if (state === 'completed' || state === 'failed') return false
+      return 2000
     },
   })
 
@@ -413,26 +426,49 @@ export default function Profile() {
           </button>
 
           <button
-            onClick={() => triggerDigest.mutate()}
-            disabled={triggerDigest.isPending || !prefForm.keywords}
+            onClick={() => { setDigestJobId(null); triggerDigest.mutate() }}
+            disabled={triggerDigest.isPending || !!digestJobId && digestProgress?.state !== 'completed' && digestProgress?.state !== 'failed' || !prefForm.keywords}
             title={!prefForm.keywords ? 'Set keywords first' : 'Send digest now'}
             className="px-4 py-2 border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-colors flex items-center gap-2"
           >
             <Send className="w-4 h-4" />
-            {triggerDigest.isPending ? 'Sending…' : 'Send Now'}
+            Send Now
           </button>
 
-          {digestTriggered && (
-            <span className="text-sm text-green-600 font-medium">
-              Digest queued — check your inbox!
-            </span>
-          )}
           {triggerDigest.isError && (
             <span className="text-sm text-red-600">
               {(triggerDigest.error as any)?.response?.data?.error || 'Failed to queue digest'}
             </span>
           )}
         </div>
+
+        {digestJobId && digestProgress && (
+          <div className="mt-4 bg-slate-50 border border-slate-200 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-slate-700">
+                {digestProgress.state === 'failed' ? '✗ Failed' : digestProgress.progress?.step || 'Queued…'}
+              </span>
+              {digestProgress.progress && (
+                <span className="text-xs text-slate-500">{digestProgress.progress.percent}%</span>
+              )}
+            </div>
+            <div className="w-full bg-slate-200 rounded-full h-1.5 mb-2">
+              <div
+                className={`h-1.5 rounded-full transition-all duration-500 ${
+                  digestProgress.state === 'failed' ? 'bg-red-500' :
+                  digestProgress.state === 'completed' ? 'bg-green-500' : 'bg-indigo-500'
+                }`}
+                style={{ width: `${digestProgress.progress?.percent ?? 0}%` }}
+              />
+            </div>
+            {digestProgress.progress?.detail && (
+              <p className="text-xs text-slate-500">{digestProgress.progress.detail}</p>
+            )}
+            {digestProgress.state === 'completed' && (
+              <button onClick={() => setDigestJobId(null)} className="text-xs text-slate-400 hover:text-slate-600 mt-1">Dismiss</button>
+            )}
+          </div>
+        )}
 
         <p className="text-xs text-slate-400 mt-3">
           Requires <code>ANTHROPIC_API_KEY</code> and SMTP settings in your server's <code>.env</code>.
