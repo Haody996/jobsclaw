@@ -31,7 +31,7 @@ function formatDate(iso: string) {
 
 export default function Matches() {
   const queryClient = useQueryClient()
-  const [showSetup, setShowSetup] = useState(false)
+  const [showSetup, setShowSetup] = useState(true)
   const [prefSaved, setPrefSaved] = useState(false)
   const [digestJobId, setDigestJobId] = useState<string | null>(null)
   const [resumeSuccess, setResumeSuccess] = useState(false)

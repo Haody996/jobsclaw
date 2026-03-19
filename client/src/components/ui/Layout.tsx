@@ -3,9 +3,9 @@ import { LayoutDashboard, Search, FileText, User, LogOut, LogIn, Sparkles } from
 import { clearAuth, isAuthenticated } from '../../lib/auth'
 
 const navItems = [
+  { to: '/matches', label: 'AI Matches', icon: Sparkles },
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { to: '/jobs', label: 'Find Jobs', icon: Search },
-  { to: '/matches', label: 'AI Matches', icon: Sparkles },
   { to: '/applications', label: 'Applications', icon: FileText },
   { to: '/profile', label: 'Profile', icon: User },
 ]

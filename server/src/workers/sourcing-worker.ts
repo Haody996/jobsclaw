@@ -40,8 +40,12 @@ const worker = new Worker(
       await progress(job, 'Skipped — digest is disabled', 100, 'Enable it in preferences')
       return
     }
-    if (!user.profile?.resumeText) {
+    if (!user.profile?.resumePath) {
       await progress(job, 'Skipped — no resume found', 100, 'Upload your resume first')
+      return
+    }
+    if (!user.profile.resumeText) {
+      await progress(job, 'Skipped — resume text missing', 100, 'Re-upload your resume PDF so text can be extracted')
       return
     }
 

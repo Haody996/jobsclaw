@@ -50,9 +50,9 @@ router.post('/resume', authMiddleware, upload.single('resume'), async (req: Auth
   let resumeText = ''
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require('pdf-parse') as (buf: Buffer) => Promise<{ text: string }>
-    const buffer = fs.readFileSync(req.file.path)
-    const result = await pdfParse(buffer)
+    const { PDFParse } = require('pdf-parse') as { PDFParse: new (opts: { url: string }) => { getText(): Promise<{ text: string }> } }
+    const absPath = require('path').resolve(req.file.path)
+    const result = await new PDFParse({ url: `file://${absPath}` }).getText()
     resumeText = result.text
   } catch (err) {
     console.warn('PDF text extraction failed:', err)
@@ -60,12 +60,10 @@ router.post('/resume', authMiddleware, upload.single('resume'), async (req: Auth
 
   const parsed = resumeText ? parseResumeText(resumeText) : {}
 
-  await prisma.profile.update({
+  await prisma.profile.upsert({
     where: { userId: req.userId! },
-    data: {
-      resumePath: req.file.path,
-      resumeText: resumeText || null,
-    },
+    update: { resumePath: req.file.path, resumeText: resumeText || null },
+    create: { userId: req.userId!, resumePath: req.file.path, resumeText: resumeText || null },
   })
 
   res.json({ resumePath: req.file.path, hasText: !!resumeText, parsed })
