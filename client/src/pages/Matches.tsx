@@ -35,14 +35,18 @@ export default function Matches() {
   const [prefSaved, setPrefSaved] = useState(false)
   const [digestJobId, setDigestJobId] = useState<string | null>(null)
   const [resumeSuccess, setResumeSuccess] = useState(false)
-  const [prefForm, setPrefForm] = useState({
-    keywords: '',
-    location: '',
-    dailyEmailTime: '09:00',
-    emailEnabled: false,
+  const [prefForm, setPrefForm] = useState(() => {
+    const cached = queryClient.getQueryData<any>(['preferences'])
+    const p = cached?.preference
+    return {
+      keywords: p?.keywords || '',
+      location: p?.location || '',
+      dailyEmailTime: p?.dailyEmailTime || '09:00',
+      emailEnabled: p?.emailEnabled ?? false,
+    }
   })
 
-  const prefsLoaded = useRef(false)
+  const prefsLoaded = useRef(!!queryClient.getQueryData(['preferences']))
 
   useQuery({
     queryKey: ['preferences'],
