@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Upload, Plus, Trash2, FileText, CheckCircle, Eye, EyeOff, Mail, Send } from 'lucide-react'
 import api from '../lib/api'
 import Spinner from '../components/ui/Spinner'
+import AutocompleteInput from '../components/ui/AutocompleteInput'
 
 const DEFAULT_QUESTIONS = [
   'Are you legally authorized to work in the US?',
@@ -361,20 +362,20 @@ export default function Profile() {
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1.5">Job Keywords</label>
-            <input
-              type="text"
+            <AutocompleteInput
+              type="job"
               value={prefForm.keywords}
-              onChange={(e) => setPrefForm((f) => ({ ...f, keywords: e.target.value }))}
+              onChange={(v) => setPrefForm((f) => ({ ...f, keywords: v }))}
               placeholder="e.g. software engineer, react developer"
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-700 mb-1.5">Location</label>
-            <input
-              type="text"
+            <AutocompleteInput
+              type="location"
               value={prefForm.location}
-              onChange={(e) => setPrefForm((f) => ({ ...f, location: e.target.value }))}
+              onChange={(v) => setPrefForm((f) => ({ ...f, location: v }))}
               placeholder="e.g. San Francisco, CA"
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
