@@ -66,10 +66,13 @@ export default function Matches() {
   })
 
   const triggerDigest = useMutation({
-    mutationFn: () => api.post('/preferences/trigger'),
+    mutationFn: async () => {
+      await api.put('/preferences', prefForm)
+      return api.post('/preferences/trigger')
+    },
     onSuccess: ({ data }) => {
+      queryClient.invalidateQueries({ queryKey: ['preferences'] })
       setDigestJobId(data.jobId)
-      queryClient.invalidateQueries({ queryKey: ['matches'] })
     },
   })
 

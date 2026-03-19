@@ -21,7 +21,7 @@ async function progress(job: Job, step: string, percent: number, detail?: string
 const worker = new Worker(
   'job-sourcing',
   async (job) => {
-    const { userId } = job.data as { userId: string }
+    const { userId, manual } = job.data as { userId: string; manual?: boolean }
 
     await progress(job, 'Loading your profile…', 5)
 
@@ -32,7 +32,11 @@ const worker = new Worker(
 
     if (!user) throw new Error('User not found')
 
-    if (!user.preference?.emailEnabled) {
+    if (!user.preference?.keywords) {
+      await progress(job, 'Skipped — no keywords set', 100, 'Set job keywords in AI Matches')
+      return
+    }
+    if (!manual && !user.preference.emailEnabled) {
       await progress(job, 'Skipped — digest is disabled', 100, 'Enable it in preferences')
       return
     }

@@ -41,7 +41,7 @@ router.put('/', authMiddleware, async (req: AuthRequest, res) => {
 router.post('/trigger', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const jobId = `manual-${req.userId!}-${Date.now()}`
-    await sourcingQueue.add('send-digest', { userId: req.userId! }, { jobId })
+    await sourcingQueue.add('send-digest', { userId: req.userId!, manual: true }, { jobId })
     res.json({ jobId })
   } catch {
     res.status(500).json({ error: 'Failed to queue digest' })
