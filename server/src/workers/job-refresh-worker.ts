@@ -94,7 +94,7 @@ const worker = new Worker(
 )
 
 worker.on('active', () => log('Worker picked up a job'))
-worker.on('failed', (_job, err) => log(`Job failed: ${err?.message}`))
-worker.on('error', (err) => log(`Worker error: ${err?.message}`))
+worker.on('failed', (_job: any, err: any) => log(`Job failed: ${err?.message}`))
+worker.on('error', (err: any) => log(`Worker error: ${err?.message}`))
 
 export default worker
