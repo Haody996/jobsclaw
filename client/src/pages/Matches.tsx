@@ -410,7 +410,7 @@ export default function Matches() {
                       href={job.link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex-shrink-0 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+                      className="flex-shrink-0 px-4 py-2 bg-indigo-600 !text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
                     >
                       Apply
                     </a>

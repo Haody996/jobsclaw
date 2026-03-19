@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Search, FileText, User, LogOut, LogIn, Sparkles, Menu, X } from 'lucide-react'
+import { LayoutDashboard, FileText, User, LogOut, LogIn, Sparkles, Menu, X } from 'lucide-react'
 import { clearAuth, isAuthenticated } from '../../lib/auth'
 
 const navItems = [
   { to: '/matches', label: 'AI Matches', icon: Sparkles },
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
-  { to: '/jobs', label: 'Find Jobs', icon: Search },
   { to: '/applications', label: 'Applications', icon: FileText },
   { to: '/profile', label: 'Profile', icon: User },
 ]
