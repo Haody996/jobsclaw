@@ -1,15 +1,18 @@
-# AutoApply
+# JobsClaw
 
-AI-powered job application tracker with daily job digest emails.
+AI-powered job application assistant — find, match, and track jobs effortlessly.
+
+Live at [jobsclaw.net](https://jobsclaw.net)
 
 ## Features
 
-- **Job Board** — search and browse jobs via JSearch API
+- **AI Job Matches** — Claude AI ranks scraped LinkedIn jobs against your resume; live progress updates
+- **Daily Email Digest** — automated daily email with your top 5 matched jobs
+- **Job Board** — browse weekly-refreshed jobs stored in DB (no live API calls on every load)
 - **Auto Apply** — automated LinkedIn Easy Apply via Playwright
-- **AI Job Matching** — Claude AI ranks jobs against your resume
-- **Daily Email Digest** — scrapes LinkedIn daily, emails top 5 matched jobs
 - **Application Tracker** — track status of all your applications
-- **Profile & Resume** — upload PDF resume, auto-extracts text for AI matching
+- **Profile & Resume** — upload PDF resume with auto-extracted text; autocomplete for keywords & location
+- **Google Sign-In** — OAuth2 login alongside email/password
 
 ## Tech Stack
 
