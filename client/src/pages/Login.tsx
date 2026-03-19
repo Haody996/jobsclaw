@@ -39,7 +39,7 @@ export default function Login() {
       >
         <div className="flex items-center gap-2 mb-8">
           <Briefcase className="w-7 h-7 text-indigo-600" />
-          <span className="font-bold text-2xl text-slate-900">Jobs Claw</span>
+          <span className="font-bold text-2xl text-slate-900">JobsClaw</span>
         </div>
 
         <h1 className="text-xl font-semibold text-slate-900 mb-1">Welcome back</h1>

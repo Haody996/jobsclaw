@@ -6,6 +6,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import Jobs from './pages/Jobs'
+import Matches from './pages/Matches'
 import Profile from './pages/Profile'
 import Applications from './pages/Applications'
 
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<Dashboard />} />
             <Route path="jobs" element={<Jobs />} />
+            <Route path="matches" element={<PrivateRoute><Matches /></PrivateRoute>} />
             <Route path="profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
             <Route path="applications" element={<PrivateRoute><Applications /></PrivateRoute>} />
           </Route>
