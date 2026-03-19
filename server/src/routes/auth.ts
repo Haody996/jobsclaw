@@ -145,8 +145,8 @@ router.post('/google', async (req: Request, res: Response): Promise<void> => {
 
     res.json({ token, user: { id: user.id, email: user.email } })
   } catch (err: any) {
-    console.error('[google-auth] Verification failed:', err?.message || err)
-    res.status(401).json({ error: 'Google authentication failed', detail: err?.message })
+    console.error('[google-auth] Verification failed:', JSON.stringify(err), String(err))
+    res.status(401).json({ error: 'Google authentication failed', detail: String(err) })
   }
 })
 
