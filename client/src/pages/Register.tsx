@@ -15,7 +15,7 @@ export default function Register() {
   const [loading, setLoading] = useState(false)
 
   function dismiss() {
-    navigate(-1)
+    navigate('/')
   }
 
   function goToLogin() {
