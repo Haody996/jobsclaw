@@ -122,25 +122,6 @@ export default function Dashboard() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-slate-900">Recommended Jobs</h2>
           <div className="flex items-center gap-3">
-            {/* Apply mode toggle */}
-            <div className="flex items-center bg-slate-100 rounded-lg p-0.5 text-xs font-medium">
-              <button
-                onClick={() => setMode('auto')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all ${
-                  mode === 'auto' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <Bot className="w-3.5 h-3.5" /> Auto Apply
-              </button>
-              <button
-                onClick={() => setMode('tab')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all ${
-                  mode === 'tab' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <ExternalLink className="w-3.5 h-3.5" /> New Tab
-              </button>
-            </div>
             <button
               onClick={() => navigate('/jobs')}
               className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
