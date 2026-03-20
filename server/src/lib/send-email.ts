@@ -9,23 +9,37 @@ function buildEmailHtml(
   clientUrl: string
 ): string {
   const jobRows = matches
-    .map(
-      (job, i) => `
+    .map((job, i) => {
+      const score = job.compatibility_score != null
+        ? (job.compatibility_score / 10).toFixed(1)
+        : null
+      const scoreColor = job.compatibility_score != null
+        ? job.compatibility_score >= 85 ? '#15803d' : job.compatibility_score >= 65 ? '#a16207' : '#475569'
+        : '#475569'
+      const scoreBg = job.compatibility_score != null
+        ? job.compatibility_score >= 85 ? '#dcfce7' : job.compatibility_score >= 65 ? '#fef9c3' : '#f1f5f9'
+        : '#f1f5f9'
+      return `
       <tr>
         <td style="padding:20px 24px; border-bottom:1px solid #e2e8f0;">
-          <p style="margin:0 0 2px; font-size:15px; font-weight:700; color:#1e293b;">
-            ${i + 1}.&nbsp;
-            <a href="${job.link}" style="color:#4f46e5; text-decoration:none;">${job.title}</a>
-          </p>
-          <p style="margin:0 0 8px; font-size:13px; color:#64748b; font-weight:600;">
-            ${job.company}${job.location ? ` &middot; ${job.location}` : ''}
-          </p>
-          <p style="margin:0; font-size:14px; color:#475569; line-height:1.5;">
-            ${job.match_rationale}
-          </p>
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+            <div style="flex:1; min-width:0;">
+              <p style="margin:0 0 2px; font-size:15px; font-weight:700; color:#1e293b;">
+                ${i + 1}.&nbsp;
+                <a href="${job.link}" style="color:#4f46e5; text-decoration:none;">${job.title}</a>
+              </p>
+              <p style="margin:0 0 8px; font-size:13px; color:#64748b; font-weight:600;">
+                ${job.company}${job.location ? ` &middot; ${job.location}` : ''}
+              </p>
+              <p style="margin:0; font-size:14px; color:#475569; line-height:1.5;">
+                ${job.match_rationale}
+              </p>
+            </div>
+            ${score ? `<div style="flex-shrink:0; background:${scoreBg}; color:${scoreColor}; font-size:12px; font-weight:700; padding:4px 10px; border-radius:20px; white-space:nowrap;">${score} / 10</div>` : ''}
+          </div>
         </td>
       </tr>`
-    )
+    })
     .join('')
 
   return `<!DOCTYPE html>
