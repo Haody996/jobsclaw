@@ -1,16 +1,26 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
-import { Briefcase } from 'lucide-react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import api from '../lib/api'
 import { setToken, setUser } from '../lib/auth'
 import GoogleSignInButton from '../components/ui/GoogleSignInButton'
 
 export default function Register() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const background = (location.state as any)?.backgroundLocation
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  function dismiss() {
+    navigate(-1)
+  }
+
+  function goToLogin() {
+    navigate('/login', { state: { backgroundLocation: background ?? { pathname: '/' } } })
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -30,15 +40,15 @@ export default function Register() {
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center p-4 z-50"
-      onClick={() => navigate(-1)}
+      className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      onClick={dismiss}
     >
       <div
         className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md p-8"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 mb-8">
-          <Briefcase className="w-7 h-7 text-indigo-600" />
+          <img src="/icon.png" alt="JobsClaw" className="w-7 h-7" />
           <span className="font-bold text-2xl text-slate-900">JobsClaw</span>
         </div>
 
@@ -90,9 +100,9 @@ export default function Register() {
 
         <p className="mt-6 text-center text-sm text-slate-500">
           Already have an account?{' '}
-          <Link to="/login" className="text-indigo-600 hover:underline font-medium">
+          <button onClick={goToLogin} className="text-indigo-600 hover:underline font-medium">
             Sign in
-          </Link>
+          </button>
         </p>
       </div>
     </div>

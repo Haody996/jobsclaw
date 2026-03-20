@@ -1,16 +1,26 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
-import { Briefcase } from 'lucide-react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import api from '../lib/api'
 import { setToken, setUser } from '../lib/auth'
 import GoogleSignInButton from '../components/ui/GoogleSignInButton'
 
 export default function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const background = (location.state as any)?.backgroundLocation
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  function dismiss() {
+    navigate(-1)
+  }
+
+  function goToRegister() {
+    navigate('/register', { state: { backgroundLocation: background ?? (location.state as any)?.backgroundLocation ?? { pathname: '/' } } })
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -30,15 +40,15 @@ export default function Login() {
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center p-4 z-50"
-      onClick={() => navigate(-1)}
+      className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      onClick={dismiss}
     >
       <div
         className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md p-8"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 mb-8">
-          <Briefcase className="w-7 h-7 text-indigo-600" />
+          <img src="/icon.png" alt="JobsClaw" className="w-7 h-7" />
           <span className="font-bold text-2xl text-slate-900">JobsClaw</span>
         </div>
 
@@ -87,9 +97,9 @@ export default function Login() {
 
         <p className="mt-6 text-center text-sm text-slate-500">
           No account?{' '}
-          <Link to="/register" className="text-indigo-600 hover:underline font-medium">
+          <button onClick={goToRegister} className="text-indigo-600 hover:underline font-medium">
             Create one
-          </Link>
+          </button>
         </p>
       </div>
     </div>

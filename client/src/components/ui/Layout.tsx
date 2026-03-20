@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { LayoutDashboard, FileText, User, LogOut, LogIn, Sparkles, Menu, X } from 'lucide-react'
 import { clearAuth, isAuthenticated } from '../../lib/auth'
 
@@ -16,8 +16,13 @@ function JobsClawIcon({ className }: { className?: string }) {
 
 export default function Layout() {
   const navigate = useNavigate()
+  const location = useLocation()
   const authed = isAuthenticated()
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  function openLogin() {
+    navigate('/login', { state: { backgroundLocation: location } })
+  }
 
   function handleLogout() {
     clearAuth()
@@ -58,7 +63,7 @@ export default function Layout() {
               Sign Out
             </button>
           ) : (
-            <button onClick={() => navigate('/login')} className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
+            <button onClick={openLogin} className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
               <LogIn className="w-4 h-4" />
               Sign In
             </button>
@@ -97,7 +102,7 @@ export default function Layout() {
                   Sign Out
                 </button>
               ) : (
-                <button onClick={() => { navigate('/login'); setMobileOpen(false) }} className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
+                <button onClick={() => { openLogin(); setMobileOpen(false) }} className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
                   <LogIn className="w-4 h-4" />
                   Sign In
                 </button>
