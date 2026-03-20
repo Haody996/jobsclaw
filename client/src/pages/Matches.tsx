@@ -398,17 +398,20 @@ export default function Matches() {
                           </h3>
                           <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-500 flex-shrink-0 transition-colors" />
                         </a>
-                        {job.compatibility_score != null && (
-                          <span className={`flex-shrink-0 text-xs font-bold px-2.5 py-1 rounded-full ${
-                            job.compatibility_score >= 85
-                              ? 'bg-green-100 text-green-700'
-                              : job.compatibility_score >= 65
-                              ? 'bg-yellow-100 text-yellow-700'
-                              : 'bg-slate-100 text-slate-600'
-                          }`}>
-                            {job.compatibility_score}% match
-                          </span>
-                        )}
+                        {job.compatibility_score != null && (() => {
+                          const score = (job.compatibility_score / 10).toFixed(1)
+                          return (
+                            <span className={`flex-shrink-0 text-xs font-bold px-2.5 py-1 rounded-full ${
+                              job.compatibility_score >= 85
+                                ? 'bg-green-100 text-green-700'
+                                : job.compatibility_score >= 65
+                                ? 'bg-yellow-100 text-yellow-700'
+                                : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {score} / 10
+                            </span>
+                          )
+                        })()}
                       </div>
 
                       <div className="flex items-center gap-3 mb-3">
