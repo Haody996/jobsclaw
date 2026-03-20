@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query'
 import { TrendingUp, Send, Clock, CheckCircle } from 'lucide-react'
 import api from '../lib/api'
 import { isAuthenticated } from '../lib/auth'
-import { useApplyMode } from '../lib/apply-mode'
 import JobCard, { type Job } from '../components/jobs/JobCard'
 import JobSearchBar from '../components/jobs/JobSearchBar'
 import Spinner from '../components/ui/Spinner'
@@ -13,7 +12,6 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('software engineer')
   const [location, setLocation] = useState('Los Angeles')
-  const { mode } = useApplyMode()
 
   const { data: jobsData, isLoading: jobsLoading } = useQuery({
     queryKey: ['dashboard-jobs', query, location],
@@ -142,7 +140,7 @@ export default function Dashboard() {
         ) : (
           <div className="grid grid-cols-3 gap-4">
             {(jobsData?.jobs || []).slice(0, 9).map((job: Job) => (
-              <JobCard key={job.id} job={job} applyMode={mode} />
+              <JobCard key={job.id} job={job} />
             ))}
           </div>
         )}

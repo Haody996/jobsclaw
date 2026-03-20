@@ -20,8 +20,6 @@ export interface Job {
 
 interface JobCardProps {
   job: Job
-  applyMode?: 'auto' | 'tab'
-  onApplied?: (jobId: string, applicationId: string) => void
 }
 
 const SOURCE_COLORS: Record<string, string> = {
@@ -31,7 +29,7 @@ const SOURCE_COLORS: Record<string, string> = {
   default: 'default',
 }
 
-export default function JobCard({ job, applyMode, onApplied }: JobCardProps) {
+export default function JobCard({ job }: JobCardProps) {
   const sourceLower = job.source?.toLowerCase() || 'default'
   const sourceColor = (SOURCE_COLORS[sourceLower] || 'default') as any
 
