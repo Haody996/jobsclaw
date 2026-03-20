@@ -9,6 +9,7 @@ import Jobs from './pages/Jobs'
 import Matches from './pages/Matches'
 import Profile from './pages/Profile'
 import Applications from './pages/Applications'
+import Info from './pages/Info'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,6 +32,7 @@ function AppRoutes() {
     <>
       {/* Main app — renders the background page when a modal is open */}
       <Routes location={background ?? location}>
+        <Route path="/info" element={<Info />} />
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="jobs" element={<Jobs />} />
