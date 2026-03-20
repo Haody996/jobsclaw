@@ -30,7 +30,7 @@ export default function Login() {
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 flex items-center justify-center p-4 z-50"
       onClick={() => navigate(-1)}
     >
       <div
