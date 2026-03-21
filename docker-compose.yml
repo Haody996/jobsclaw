@@ -49,6 +49,23 @@ services:
       - redis
     restart: unless-stopped
 
+  apply-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.apply-worker
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://autoapply:${POSTGRES_PASSWORD:-changeme123}@postgres:5432/autoapply
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - uploads:/app/server/uploads
+      - apply_state:/root/.config/autoapply
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
   job-refresh-worker:
     build:
       context: .
@@ -68,3 +85,4 @@ services:
 volumes:
   postgres_data:
   uploads:
+  apply_state:
