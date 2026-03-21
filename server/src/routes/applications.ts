@@ -58,6 +58,27 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise
   res.json({ applications, total, page: parseInt(page), stats: statsMap })
 })
 
+// POST /api/applications/by-urls — batch lookup application status by job URLs
+router.post('/by-urls', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { urls } = req.body as { urls: string[] }
+  if (!Array.isArray(urls) || urls.length === 0) {
+    res.json({ applications: {} })
+    return
+  }
+
+  const apps = await prisma.application.findMany({
+    where: { userId: req.userId!, job: { url: { in: urls } } },
+    include: { job: { select: { url: true } } },
+  })
+
+  const map: Record<string, { id: string; status: string }> = {}
+  for (const app of apps) {
+    map[app.job.url] = { id: app.id, status: app.status }
+  }
+
+  res.json({ applications: map })
+})
+
 // GET /api/applications/:id
 router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   const appId = req.params.id as string

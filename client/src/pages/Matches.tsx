@@ -29,11 +29,20 @@ const STATUS_DISPLAY: Record<string, { label: string; cls: string }> = {
   FAILED: { label: 'Failed', cls: 'bg-red-100 text-red-700' },
 }
 
-function QuickApplyButton({ job }: { job: JobMatch }) {
-  const [appId, setAppId] = useState<string | null>(null)
-  const [status, setStatus] = useState<string | null>(null)
+function QuickApplyButton({ job, existing }: { job: JobMatch; existing?: { id: string; status: string } }) {
+  const queryClient = useQueryClient()
+  const [appId, setAppId] = useState<string | null>(existing?.id || null)
+  const [status, setStatus] = useState<string | null>(existing?.status || null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Sync when existing prop changes (e.g. after refetch)
+  useEffect(() => {
+    if (existing) {
+      setAppId(existing.id)
+      setStatus(existing.status)
+    }
+  }, [existing?.id, existing?.status])
 
   useEffect(() => {
     if (!appId || !status || TERMINAL.includes(status)) return
@@ -41,7 +50,12 @@ function QuickApplyButton({ job }: { job: JobMatch }) {
       try {
         const { data } = await api.get(`/applications/${appId}`)
         setStatus(data.status)
-        if (TERMINAL.includes(data.status)) clearInterval(interval)
+        if (TERMINAL.includes(data.status)) {
+          clearInterval(interval)
+          // Sync both application statuses and match app statuses
+          queryClient.invalidateQueries({ queryKey: ['applications'] })
+          queryClient.invalidateQueries({ queryKey: ['match-app-statuses'] })
+        }
       } catch { clearInterval(interval) }
     }, 2000)
     return () => clearInterval(interval)
@@ -59,6 +73,8 @@ function QuickApplyButton({ job }: { job: JobMatch }) {
       })
       setAppId(data.applicationId)
       setStatus('PENDING')
+      queryClient.invalidateQueries({ queryKey: ['applications'] })
+      queryClient.invalidateQueries({ queryKey: ['match-app-statuses'] })
     } catch (err: any) {
       const msg = err.response?.data?.error || 'Failed'
       if (err.response?.status === 409) {
@@ -222,6 +238,24 @@ export default function Matches() {
     queryFn: async () => {
       const { data } = await api.get('/matches')
       return data
+    },
+  })
+
+  // Collect all job URLs from match history and fetch their application statuses
+  const allJobUrls = (data?.history ?? []).flatMap((run) => run.topMatches.map((j) => j.link))
+  const { data: appStatuses } = useQuery<Record<string, { id: string; status: string }>>({
+    queryKey: ['match-app-statuses', allJobUrls.join(',')],
+    queryFn: async () => {
+      if (allJobUrls.length === 0) return {}
+      const { data } = await api.post('/applications/by-urls', { urls: allJobUrls })
+      return data.applications
+    },
+    enabled: allJobUrls.length > 0,
+    refetchInterval: (query) => {
+      // Keep polling while any application is non-terminal
+      const statuses = query.state.data ? Object.values(query.state.data) : []
+      const hasActive = statuses.some((s) => !TERMINAL.includes(s.status))
+      return hasActive ? 3000 : false
     },
   })
 
@@ -511,7 +545,7 @@ export default function Matches() {
                       </div>
                     </div>
 
-                    <QuickApplyButton job={job} />
+                    <QuickApplyButton job={job} existing={appStatuses?.[job.link]} />
                   </div>
                 </div>
               ))}
