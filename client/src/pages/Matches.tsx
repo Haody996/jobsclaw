@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ExternalLink, Sparkles, MapPin, Building2, CalendarDays, Inbox, Send, CheckCircle, Settings2, ChevronDown, ChevronUp, FileText, Upload } from 'lucide-react'
+import { ExternalLink, Sparkles, MapPin, Building2, CalendarDays, Inbox, Send, CheckCircle, Settings2, ChevronDown, ChevronUp, FileText, Upload, Loader2, XCircle } from 'lucide-react'
 import api from '../lib/api'
 import Spinner from '../components/ui/Spinner'
 import AutocompleteInput from '../components/ui/AutocompleteInput'
@@ -19,6 +19,84 @@ interface MatchRun {
   runDate: string
   jobLinks: string[]
   topMatches: JobMatch[]
+}
+
+const TERMINAL = ['SUBMITTED', 'FAILED', 'INTERVIEWING', 'REJECTED', 'OFFER']
+const STATUS_DISPLAY: Record<string, { label: string; cls: string }> = {
+  PENDING: { label: 'Queued...', cls: 'bg-slate-100 text-slate-600' },
+  IN_PROGRESS: { label: 'Applying...', cls: 'bg-blue-100 text-blue-700' },
+  SUBMITTED: { label: 'Applied!', cls: 'bg-green-100 text-green-700' },
+  FAILED: { label: 'Failed', cls: 'bg-red-100 text-red-700' },
+}
+
+function QuickApplyButton({ job }: { job: JobMatch }) {
+  const [appId, setAppId] = useState<string | null>(null)
+  const [status, setStatus] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!appId || !status || TERMINAL.includes(status)) return
+    const interval = setInterval(async () => {
+      try {
+        const { data } = await api.get(`/applications/${appId}`)
+        setStatus(data.status)
+        if (TERMINAL.includes(data.status)) clearInterval(interval)
+      } catch { clearInterval(interval) }
+    }, 2000)
+    return () => clearInterval(interval)
+  }, [appId, status])
+
+  async function handleApply() {
+    setLoading(true)
+    setError(null)
+    try {
+      const { data } = await api.post('/apply/quick', {
+        title: job.title,
+        company: job.company,
+        link: job.link,
+        location: job.location,
+      })
+      setAppId(data.applicationId)
+      setStatus('PENDING')
+    } catch (err: any) {
+      const msg = err.response?.data?.error || 'Failed'
+      if (err.response?.status === 409) {
+        setAppId(err.response.data.applicationId)
+        setStatus(err.response.data.status || 'SUBMITTED')
+      } else {
+        setError(msg)
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (status) {
+    const d = STATUS_DISPLAY[status] || { label: status, cls: 'bg-slate-100 text-slate-600' }
+    return (
+      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium ${d.cls}`}>
+        {!TERMINAL.includes(status) && <Loader2 className="w-3 h-3 animate-spin" />}
+        {status === 'SUBMITTED' && <CheckCircle className="w-3 h-3" />}
+        {status === 'FAILED' && <XCircle className="w-3 h-3" />}
+        {d.label}
+      </span>
+    )
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        onClick={handleApply}
+        disabled={loading}
+        className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 !text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+      >
+        {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+        {loading ? 'Applying...' : 'Apply'}
+      </button>
+      {error && <p className="text-xs text-red-500">{error}</p>}
+    </div>
+  )
 }
 
 function formatDate(iso: string) {
@@ -433,14 +511,7 @@ export default function Matches() {
                       </div>
                     </div>
 
-                    <a
-                      href={job.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-shrink-0 px-4 py-2 bg-indigo-600 !text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
-                    >
-                      Apply
-                    </a>
+                    <QuickApplyButton job={job} />
                   </div>
                 </div>
               ))}
