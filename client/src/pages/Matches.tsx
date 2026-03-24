@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ExternalLink, Sparkles, MapPin, Building2, CalendarDays, Inbox, Send, CheckCircle, Settings2, ChevronDown, ChevronUp, FileText, Upload, Loader2, XCircle } from 'lucide-react'
+import { ExternalLink, Sparkles, MapPin, Building2, CalendarDays, Inbox, Send, CheckCircle, Settings2, ChevronDown, ChevronUp, FileText, Upload, Loader2, RefreshCw } from 'lucide-react'
 import api from '../lib/api'
 import Spinner from '../components/ui/Spinner'
 import AutocompleteInput from '../components/ui/AutocompleteInput'
@@ -88,13 +88,43 @@ function QuickApplyButton({ job, existing }: { job: JobMatch; existing?: { id: s
     }
   }
 
+  async function handleRetry() {
+    if (!appId) return
+    setLoading(true)
+    setError(null)
+    try {
+      await api.post(`/applications/${appId}/retry`)
+      setStatus('PENDING')
+      queryClient.invalidateQueries({ queryKey: ['applications'] })
+      queryClient.invalidateQueries({ queryKey: ['match-app-statuses'] })
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Retry failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   if (status) {
     const d = STATUS_DISPLAY[status] || { label: status, cls: 'bg-slate-100 text-slate-600' }
+    if (status === 'FAILED') {
+      return (
+        <div className="flex flex-col items-end gap-1">
+          <button
+            onClick={handleRetry}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 text-xs font-medium rounded-lg transition-colors disabled:opacity-60"
+          >
+            {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+            {loading ? 'Retrying...' : 'Retry'}
+          </button>
+          {error && <p className="text-xs text-red-500">{error}</p>}
+        </div>
+      )
+    }
     return (
       <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium ${d.cls}`}>
         {!TERMINAL.includes(status) && <Loader2 className="w-3 h-3 animate-spin" />}
         {status === 'SUBMITTED' && <CheckCircle className="w-3 h-3" />}
-        {status === 'FAILED' && <XCircle className="w-3 h-3" />}
         {d.label}
       </span>
     )

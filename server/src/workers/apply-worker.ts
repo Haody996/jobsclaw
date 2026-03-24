@@ -453,8 +453,11 @@ async function runLinkedInApply(
     }
 
     // Navigate to the job page
+    console.log(`LinkedIn: navigating to ${job.url}`)
     await page.goto(job.url, { waitUntil: 'domcontentloaded', timeout: 30000 })
     await page.waitForTimeout(3000)
+    console.log(`LinkedIn: landed on ${page.url()}`)
+    console.log(`LinkedIn: page title = ${await page.title()}`)
 
     // Find and click Easy Apply button
     const easyApplySelectors = [
