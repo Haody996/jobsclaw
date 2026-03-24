@@ -310,7 +310,7 @@ async function loginLinkedIn(page: any, email: string, password: string): Promis
 async function handleEasyApplyStep(page: any, profile: any, answers: any[], email: string): Promise<boolean> {
   await page.waitForTimeout(1500)
 
-  const modal = page.locator('.jobs-easy-apply-modal, [data-test-modal]').first()
+  const modal = page.locator('[role="dialog"], .jobs-easy-apply-modal, [data-test-modal], [class*="easy-apply"]').first()
 
   // --- Contact / basic fields ---
   const fieldMap: [string, string][] = [
@@ -385,11 +385,21 @@ async function handleEasyApplyStep(page: any, profile: any, answers: any[], emai
   } catch { /* ok */ }
 
   // --- Submit / Review / Next ---
-  const footerBtns = modal.locator('footer button, .artdeco-modal__actionbar button')
+  // Search buttons in modal footer, action bar, or anywhere in the dialog
+  const footerBtns = modal.locator('footer button, [class*="footer"] button, [class*="action"] button, button')
+
+  // Log all visible buttons for debugging
+  try {
+    const allBtns = await footerBtns.all()
+    for (const b of allBtns) {
+      const text = (await b.innerText().catch(() => '')).trim()
+      if (text && text.length < 40) console.log(`LinkedIn modal button: "${text}"`)
+    }
+  } catch { /* ok */ }
 
   // Submit application
-  for (const txt of ['Submit application', 'Submit your application']) {
-    const btn = footerBtns.filter({ hasText: txt }).first()
+  for (const txt of ['Submit application', 'Submit your application', 'Submit']) {
+    const btn = footerBtns.filter({ hasText: new RegExp(txt, 'i') }).first()
     if (await btn.isVisible({ timeout: 1000 }).catch(() => false)) {
       await btn.click({ timeout: 5000 })
       await page.waitForTimeout(3000)
@@ -398,19 +408,21 @@ async function handleEasyApplyStep(page: any, profile: any, answers: any[], emai
   }
 
   // Review / Next / Continue
-  for (const txt of ['Review', 'Next', 'Continue to next step']) {
-    const btn = footerBtns.filter({ hasText: txt }).first()
+  for (const txt of ['Review', 'Next', 'Continue']) {
+    const btn = footerBtns.filter({ hasText: new RegExp(`^${txt}`, 'i') }).first()
     if (await btn.isVisible({ timeout: 1000 }).catch(() => false)) {
       await btn.click({ timeout: 5000 })
       return false
     }
   }
 
-  // Fallback: any primary button in footer
-  const primaryBtn = footerBtns.filter({ hasText: /submit|next|review|continue/i }).first()
-  if (await primaryBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-    const label = await primaryBtn.innerText()
-    await primaryBtn.click({ timeout: 5000 })
+  // Fallback: any button with submit/next/review/continue text anywhere on page
+  const pageBtns = page.locator('button')
+  const fallback = pageBtns.filter({ hasText: /submit|next|review|continue/i }).first()
+  if (await fallback.isVisible({ timeout: 1000 }).catch(() => false)) {
+    const label = await fallback.innerText()
+    console.log(`LinkedIn modal fallback button: "${label.trim()}"`)
+    await fallback.click({ timeout: 5000 })
     if (/submit/i.test(label)) { await page.waitForTimeout(3000); return true }
     return false
   }

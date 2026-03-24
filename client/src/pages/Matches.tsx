@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ExternalLink, Sparkles, MapPin, Building2, CalendarDays, Inbox, Send, CheckCircle, Settings2, ChevronDown, ChevronUp, FileText, Upload, Loader2, RefreshCw } from 'lucide-react'
+import { ExternalLink, Sparkles, MapPin, Building2, CalendarDays, Inbox, Send, CheckCircle, Settings2, ChevronDown, ChevronUp, FileText, Upload } from 'lucide-react'
 import api from '../lib/api'
 import Spinner from '../components/ui/Spinner'
 import AutocompleteInput from '../components/ui/AutocompleteInput'
@@ -21,127 +21,18 @@ interface MatchRun {
   topMatches: JobMatch[]
 }
 
-const TERMINAL = ['SUBMITTED', 'FAILED', 'INTERVIEWING', 'REJECTED', 'OFFER']
-const STATUS_DISPLAY: Record<string, { label: string; cls: string }> = {
-  PENDING: { label: 'Queued...', cls: 'bg-slate-100 text-slate-600' },
-  IN_PROGRESS: { label: 'Applying...', cls: 'bg-blue-100 text-blue-700' },
-  SUBMITTED: { label: 'Applied!', cls: 'bg-green-100 text-green-700' },
-  FAILED: { label: 'Failed', cls: 'bg-red-100 text-red-700' },
-}
 
-function QuickApplyButton({ job, existing }: { job: JobMatch; existing?: { id: string; status: string } }) {
-  const queryClient = useQueryClient()
-  const [appId, setAppId] = useState<string | null>(existing?.id || null)
-  const [status, setStatus] = useState<string | null>(existing?.status || null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  // Sync when existing prop changes (e.g. after refetch)
-  useEffect(() => {
-    if (existing) {
-      setAppId(existing.id)
-      setStatus(existing.status)
-    }
-  }, [existing?.id, existing?.status])
-
-  useEffect(() => {
-    if (!appId || !status || TERMINAL.includes(status)) return
-    const interval = setInterval(async () => {
-      try {
-        const { data } = await api.get(`/applications/${appId}`)
-        setStatus(data.status)
-        if (TERMINAL.includes(data.status)) {
-          clearInterval(interval)
-          // Sync both application statuses and match app statuses
-          queryClient.invalidateQueries({ queryKey: ['applications'] })
-          queryClient.invalidateQueries({ queryKey: ['match-app-statuses'] })
-        }
-      } catch { clearInterval(interval) }
-    }, 2000)
-    return () => clearInterval(interval)
-  }, [appId, status])
-
-  async function handleApply() {
-    setLoading(true)
-    setError(null)
-    try {
-      const { data } = await api.post('/apply/quick', {
-        title: job.title,
-        company: job.company,
-        link: job.link,
-        location: job.location,
-      })
-      setAppId(data.applicationId)
-      setStatus('PENDING')
-      queryClient.invalidateQueries({ queryKey: ['applications'] })
-      queryClient.invalidateQueries({ queryKey: ['match-app-statuses'] })
-    } catch (err: any) {
-      const msg = err.response?.data?.error || 'Failed'
-      if (err.response?.status === 409) {
-        setAppId(err.response.data.applicationId)
-        setStatus(err.response.data.status || 'SUBMITTED')
-      } else {
-        setError(msg)
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function handleRetry() {
-    if (!appId) return
-    setLoading(true)
-    setError(null)
-    try {
-      await api.post(`/applications/${appId}/retry`)
-      setStatus('PENDING')
-      queryClient.invalidateQueries({ queryKey: ['applications'] })
-      queryClient.invalidateQueries({ queryKey: ['match-app-statuses'] })
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Retry failed')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (status) {
-    const d = STATUS_DISPLAY[status] || { label: status, cls: 'bg-slate-100 text-slate-600' }
-    if (status === 'FAILED') {
-      return (
-        <div className="flex flex-col items-end gap-1">
-          <button
-            onClick={handleRetry}
-            disabled={loading}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 text-xs font-medium rounded-lg transition-colors disabled:opacity-60"
-          >
-            {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-            {loading ? 'Retrying...' : 'Retry'}
-          </button>
-          {error && <p className="text-xs text-red-500">{error}</p>}
-        </div>
-      )
-    }
-    return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium ${d.cls}`}>
-        {!TERMINAL.includes(status) && <Loader2 className="w-3 h-3 animate-spin" />}
-        {status === 'SUBMITTED' && <CheckCircle className="w-3 h-3" />}
-        {d.label}
-      </span>
-    )
-  }
-
+function QuickApplyButton({ job }: { job: JobMatch }) {
   return (
-    <div className="flex flex-col items-end gap-1">
-      <button
-        onClick={handleApply}
-        disabled={loading}
-        className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 !text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors"
-      >
-        {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-        {loading ? 'Applying...' : 'Apply'}
-      </button>
-      {error && <p className="text-xs text-red-500">{error}</p>}
-    </div>
+    <a
+      href={job.link}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 !text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+    >
+      <ExternalLink className="w-3.5 h-3.5" />
+      Apply
+    </a>
   )
 }
 
@@ -271,23 +162,6 @@ export default function Matches() {
     },
   })
 
-  // Collect all job URLs from match history and fetch their application statuses
-  const allJobUrls = (data?.history ?? []).flatMap((run) => run.topMatches.map((j) => j.link))
-  const { data: appStatuses } = useQuery<Record<string, { id: string; status: string }>>({
-    queryKey: ['match-app-statuses', allJobUrls.join(',')],
-    queryFn: async () => {
-      if (allJobUrls.length === 0) return {}
-      const { data } = await api.post('/applications/by-urls', { urls: allJobUrls })
-      return data.applications
-    },
-    enabled: allJobUrls.length > 0,
-    refetchInterval: (query) => {
-      // Keep polling while any application is non-terminal
-      const statuses = query.state.data ? Object.values(query.state.data) : []
-      const hasActive = statuses.some((s) => !TERMINAL.includes(s.status))
-      return hasActive ? 3000 : false
-    },
-  })
 
   if (isLoading) {
     return (
@@ -575,7 +449,7 @@ export default function Matches() {
                       </div>
                     </div>
 
-                    <QuickApplyButton job={job} existing={appStatuses?.[job.link]} />
+                    <QuickApplyButton job={job} />
                   </div>
                 </div>
               ))}
