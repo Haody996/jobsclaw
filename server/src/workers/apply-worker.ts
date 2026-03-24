@@ -459,17 +459,19 @@ async function runLinkedInApply(
     console.log(`LinkedIn: landed on ${page.url()}`)
     console.log(`LinkedIn: page title = ${await page.title()}`)
 
-    // Find and click Easy Apply button
+    // Find and click Easy Apply button (may be <button> or <a>)
     const easyApplySelectors = [
+      '[aria-label*="Easy Apply"]',
+      'a:has-text("Easy Apply")',
+      'button:has-text("Easy Apply")',
       'button.jobs-apply-button[aria-label*="Easy Apply"]',
       '.jobs-apply-button:has-text("Easy Apply")',
-      'button[aria-label*="Easy Apply"]',
-      'button:has-text("Easy Apply")',
     ]
     let clicked = false
     for (const sel of easyApplySelectors) {
       const btn = page.locator(sel).first()
       if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
+        console.log(`LinkedIn: found Easy Apply via "${sel}"`)
         await btn.click({ timeout: 5000 })
         clicked = true
         break
@@ -477,7 +479,7 @@ async function runLinkedInApply(
     }
     if (!clicked) {
       // Check if it's "Apply" (external) or the modal is already open
-      const applyBtn = page.locator('button.jobs-apply-button').first()
+      const applyBtn = page.locator('button.jobs-apply-button, a.jobs-apply-button, [class*="apply"]').first()
       const btnText = await applyBtn.innerText().catch(() => '')
       if (/apply on/i.test(btnText)) {
         throw new Error('This LinkedIn job requires applying on the company site — no Easy Apply available.')
