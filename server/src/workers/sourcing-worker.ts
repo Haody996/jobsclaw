@@ -3,7 +3,7 @@ import { Worker, Job } from 'bullmq'
 import { connection } from '../lib/queue'
 import prisma from '../lib/prisma'
 import { scrapeLinkedInJobs } from '../lib/scrape-linkedin'
-import { scrapeIndeedJobs } from '../lib/scrape-indeed'
+import { scrapeTheMuseJobs, scrapeArbeitnowJobs } from '../lib/scrape-indeed'
 import { matchJobsToResume } from '../lib/match-jobs-llm'
 import { sendDigestEmail } from '../lib/send-email'
 
@@ -56,29 +56,31 @@ const worker = new Worker(
 
     await progress(job, 'Scraping job boards…', 15, `"${keywords}" in "${location}"`)
 
-    // Split limit across sources: 60% LinkedIn, 40% Indeed
-    const linkedinLimit = Math.ceil(fetchCount * 0.6)
-    const indeedLimit = Math.ceil(fetchCount * 0.4)
-
-    const [linkedinJobs, indeedJobs] = await Promise.allSettled([
-      scrapeLinkedInJobs(keywords, location, linkedinLimit),
-      scrapeIndeedJobs(keywords, location, indeedLimit),
+    const [linkedinJobs, museJobs, arbeitnowJobs] = await Promise.allSettled([
+      scrapeLinkedInJobs(keywords, location, fetchCount),
+      scrapeTheMuseJobs(keywords, location, 20),
+      scrapeArbeitnowJobs(keywords, location, 20),
     ])
 
     const linkedinResults = linkedinJobs.status === 'fulfilled' ? linkedinJobs.value : []
-    const indeedResults = indeedJobs.status === 'fulfilled' ? indeedJobs.value : []
+    const museResults = museJobs.status === 'fulfilled' ? museJobs.value : []
+    const arbeitnowResults = arbeitnowJobs.status === 'fulfilled' ? arbeitnowJobs.value : []
 
-    if (linkedinJobs.status === 'rejected') {
-      console.warn(`[sourcing-worker] LinkedIn scrape failed: ${linkedinJobs.reason?.message}`)
-    }
-    if (indeedJobs.status === 'rejected') {
-      console.warn(`[sourcing-worker] Indeed scrape failed: ${indeedJobs.reason?.message}`)
-    }
+    if (linkedinJobs.status === 'rejected') console.warn(`[sourcing-worker] LinkedIn failed: ${linkedinJobs.reason?.message}`)
+    if (museJobs.status === 'rejected') console.warn(`[sourcing-worker] The Muse failed: ${museJobs.reason?.message}`)
+    if (arbeitnowJobs.status === 'rejected') console.warn(`[sourcing-worker] Arbeitnow failed: ${arbeitnowJobs.reason?.message}`)
 
-    const scraped = [...linkedinResults, ...indeedResults]
+    // Deduplicate by normalized title+company
+    const seen = new Set<string>()
+    const scraped = [...linkedinResults, ...museResults, ...arbeitnowResults].filter((j) => {
+      const key = `${j.title.toLowerCase().trim()}|${j.company.toLowerCase().trim()}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
 
-    await progress(job, 'Scraping complete', 30,
-      `LinkedIn: ${linkedinResults.length}, Indeed: ${indeedResults.length} — ${scraped.length} total`)
+    const sources = [`LinkedIn: ${linkedinResults.length}`, `Muse: ${museResults.length}`, `Arbeitnow: ${arbeitnowResults.length}`].join(', ')
+    await progress(job, 'Scraping complete', 30, `${sources} — ${scraped.length} unique`)
 
     if (scraped.length === 0) {
       await progress(job, 'No jobs found today', 100, 'Try different keywords or location')
