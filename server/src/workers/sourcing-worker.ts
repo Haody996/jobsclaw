@@ -100,7 +100,7 @@ const worker = new Worker(
 
     await sendDigestEmail(
       user.email,
-      user.profile.firstName || 'there',
+      user.profile.firstName || user.email.split('@')[0],
       matches,
       keywords,
       location
