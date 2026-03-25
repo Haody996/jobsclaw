@@ -372,8 +372,10 @@ export default function Matches() {
                   onChange={(e) => setPrefForm((f) => ({ ...f, scrapeLimit: parseInt(e.target.value) }))}
                   className="w-full accent-indigo-600"
                 />
-                <div className="flex justify-between text-[10px] text-slate-400 mt-0.5">
-                  <span>20</span><span>50</span><span>100</span>
+                <div className="relative text-[10px] text-slate-400 mt-0.5 h-4">
+                  <span className="absolute left-0">20</span>
+                  <span className="absolute" style={{ left: '37.5%', transform: 'translateX(-50%)' }}>50</span>
+                  <span className="absolute right-0">100</span>
                 </div>
               </div>
               <div>
@@ -389,8 +391,11 @@ export default function Matches() {
                   onChange={(e) => setPrefForm((f) => ({ ...f, matchLimit: parseInt(e.target.value) }))}
                   className="w-full accent-indigo-600"
                 />
-                <div className="flex justify-between text-[10px] text-slate-400 mt-0.5">
-                  <span>3</span><span>5</span><span>10</span><span>20</span>
+                <div className="relative text-[10px] text-slate-400 mt-0.5 h-4">
+                  <span className="absolute left-0">3</span>
+                  <span className="absolute" style={{ left: `${((5 - 3) / 17) * 100}%`, transform: 'translateX(-50%)' }}>5</span>
+                  <span className="absolute" style={{ left: `${((10 - 3) / 17) * 100}%`, transform: 'translateX(-50%)' }}>10</span>
+                  <span className="absolute right-0">20</span>
                 </div>
               </div>
             </div>
