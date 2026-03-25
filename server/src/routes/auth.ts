@@ -124,7 +124,7 @@ router.post('/google', async (req: Request, res: Response): Promise<void> => {
     const { email, given_name, family_name } = payload
 
     // Find or create user
-    let user = await prisma.user.findUnique({ where: { email } })
+    let user = await prisma.user.findUnique({ where: { email }, include: { profile: true } })
     if (!user) {
       user = await prisma.user.create({
         data: {
@@ -136,6 +136,18 @@ router.post('/google', async (req: Request, res: Response): Promise<void> => {
             },
           },
         },
+        include: { profile: true },
+      })
+    } else if (user.profile && !user.profile.firstName && given_name) {
+      // Backfill name from Google if profile exists but name is empty
+      await prisma.profile.update({
+        where: { userId: user.id },
+        data: { firstName: given_name, lastName: family_name || '' },
+      })
+    } else if (!user.profile) {
+      // Create profile if missing
+      await prisma.profile.create({
+        data: { userId: user.id, firstName: given_name || '', lastName: family_name || '' },
       })
     }
 
