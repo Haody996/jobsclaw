@@ -62,6 +62,8 @@ export default function Matches() {
       location: p?.location || '',
       dailyEmailTime: p?.dailyEmailTime || '09:00',
       emailEnabled: p?.emailEnabled ?? false,
+      scrapeLimit: p?.scrapeLimit ?? 50,
+      matchLimit: p?.matchLimit ?? 5,
     }
   })
 
@@ -77,6 +79,8 @@ export default function Matches() {
           location: data.preference.location || '',
           dailyEmailTime: data.preference.dailyEmailTime || '09:00',
           emailEnabled: data.preference.emailEnabled ?? false,
+          scrapeLimit: data.preference.scrapeLimit ?? 50,
+          matchLimit: data.preference.matchLimit ?? 5,
         })
       }
       prefsLoaded.current = true
@@ -91,7 +95,7 @@ export default function Matches() {
       api.put('/preferences', prefForm).catch(() => {})
     }, 400)
     return () => clearTimeout(t)
-  }, [prefForm.keywords, prefForm.location, prefForm.emailEnabled, prefForm.dailyEmailTime])
+  }, [prefForm.keywords, prefForm.location, prefForm.emailEnabled, prefForm.dailyEmailTime, prefForm.scrapeLimit, prefForm.matchLimit])
 
   const { data: profileData } = useQuery({
     queryKey: ['profile'],
@@ -353,6 +357,44 @@ export default function Matches() {
                 </label>
               </div>
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                  Jobs to scrape <span className="text-slate-400 font-normal">({prefForm.scrapeLimit})</span>
+                </label>
+                <input
+                  type="range"
+                  min={20}
+                  max={100}
+                  step={10}
+                  value={prefForm.scrapeLimit}
+                  onChange={(e) => setPrefForm((f) => ({ ...f, scrapeLimit: parseInt(e.target.value) }))}
+                  className="w-full accent-indigo-600"
+                />
+                <div className="flex justify-between text-[10px] text-slate-400 mt-0.5">
+                  <span>20</span><span>50</span><span>100</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                  Top matches <span className="text-slate-400 font-normal">({prefForm.matchLimit})</span>
+                </label>
+                <input
+                  type="range"
+                  min={3}
+                  max={20}
+                  step={1}
+                  value={prefForm.matchLimit}
+                  onChange={(e) => setPrefForm((f) => ({ ...f, matchLimit: parseInt(e.target.value) }))}
+                  className="w-full accent-indigo-600"
+                />
+                <div className="flex justify-between text-[10px] text-slate-400 mt-0.5">
+                  <span>3</span><span>5</span><span>10</span><span>20</span>
+                </div>
+              </div>
+            </div>
+
             <button
               onClick={() => savePreferences.mutate()}
               disabled={savePreferences.isPending}

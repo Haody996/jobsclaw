@@ -88,6 +88,8 @@ model JobPreference {
   location       String   @default("")
   dailyEmailTime String   @default("09:00")
   emailEnabled   Boolean  @default(false)
+  scrapeLimit    Int      @default(50)
+  matchLimit     Int      @default(5)
   updatedAt      DateTime @updatedAt
 }
 

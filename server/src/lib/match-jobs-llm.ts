@@ -14,42 +14,47 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
 const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash-001']
 
-const GENERATION_CONFIG: GenerationConfig = {
-  responseMimeType: 'application/json',
-  responseSchema: {
-    type: SchemaType.OBJECT,
-    properties: {
-      top_matches: {
-        type: SchemaType.ARRAY,
-        minItems: 1,
-        maxItems: 5,
-        items: {
-          type: SchemaType.OBJECT,
-          properties: {
-            company: { type: SchemaType.STRING },
-            title: { type: SchemaType.STRING },
-            link: { type: SchemaType.STRING },
-            location: { type: SchemaType.STRING },
-            match_rationale: { type: SchemaType.STRING },
-            compatibility_score: { type: SchemaType.INTEGER },
+function buildConfig(matchLimit: number): { generationConfig: GenerationConfig; systemInstruction: string } {
+  return {
+    generationConfig: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: SchemaType.OBJECT,
+        properties: {
+          top_matches: {
+            type: SchemaType.ARRAY,
+            minItems: 1,
+            maxItems: matchLimit,
+            items: {
+              type: SchemaType.OBJECT,
+              properties: {
+                company: { type: SchemaType.STRING },
+                title: { type: SchemaType.STRING },
+                link: { type: SchemaType.STRING },
+                location: { type: SchemaType.STRING },
+                match_rationale: { type: SchemaType.STRING },
+                compatibility_score: { type: SchemaType.INTEGER },
+              },
+              required: ['company', 'title', 'link', 'location', 'match_rationale', 'compatibility_score'],
+            },
           },
-          required: ['company', 'title', 'link', 'location', 'match_rationale', 'compatibility_score'],
         },
+        required: ['top_matches'],
       },
     },
-    required: ['top_matches'],
-  },
+    systemInstruction:
+      `You are an expert technical recruiter. Analyze the candidate's resume and select the top ${matchLimit} best-matching jobs from the provided list. ` +
+      'For each match, write a punchy 1-2 sentence match_rationale explaining exactly why this job fits the candidate. ' +
+      'Also provide a compatibility_score from 0 to 100 representing how well the candidate matches the job requirements.',
+  }
 }
-
-const SYSTEM_INSTRUCTION =
-  "You are an expert technical recruiter. Analyze the candidate's resume and select the top 5 best-matching jobs from the provided list. " +
-  'For each match, write a punchy 1-2 sentence match_rationale explaining exactly why this job fits the candidate. ' +
-  'Also provide a compatibility_score from 0 to 100 representing how well the candidate matches the job requirements.'
 
 export async function matchJobsToResume(
   resumeText: string,
-  jobs: ScrapedJob[]
+  jobs: ScrapedJob[],
+  matchLimit = 5
 ): Promise<JobMatch[]> {
+  const { generationConfig, systemInstruction } = buildConfig(matchLimit)
   const prompt =
     `Resume (first 4000 chars):\n${resumeText.slice(0, 4000)}\n\n` +
     `Jobs (${jobs.length} total):\n${JSON.stringify(jobs)}`
@@ -60,8 +65,8 @@ export async function matchJobsToResume(
       console.log(`[match-jobs-llm] Trying ${modelName}…`)
       const model = genAI.getGenerativeModel({
         model: modelName,
-        generationConfig: GENERATION_CONFIG,
-        systemInstruction: SYSTEM_INSTRUCTION,
+        generationConfig,
+        systemInstruction,
       })
       const result = await model.generateContent(prompt)
       const text = result.response.text()

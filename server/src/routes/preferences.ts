@@ -10,7 +10,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const pref = await prisma.jobPreference.findUnique({ where: { userId: req.userId! } })
     res.json({
-      preference: pref ?? { keywords: '', location: '', dailyEmailTime: '09:00', emailEnabled: false },
+      preference: pref ?? { keywords: '', location: '', dailyEmailTime: '09:00', emailEnabled: false, scrapeLimit: 50, matchLimit: 5 },
     })
   } catch {
     res.status(500).json({ error: 'Failed to fetch preferences' })
@@ -19,12 +19,14 @@ router.get('/', authMiddleware, async (req: AuthRequest, res) => {
 
 // PUT /api/preferences
 router.put('/', authMiddleware, async (req: AuthRequest, res) => {
-  const { keywords = '', location = '', dailyEmailTime = '09:00', emailEnabled = false } = req.body
+  const { keywords = '', location = '', dailyEmailTime = '09:00', emailEnabled = false, scrapeLimit = 50, matchLimit = 5 } = req.body
+  const sl = Math.min(100, Math.max(20, Number(scrapeLimit) || 50))
+  const ml = Math.min(20, Math.max(3, Number(matchLimit) || 5))
   try {
     const pref = await prisma.jobPreference.upsert({
       where: { userId: req.userId! },
-      create: { userId: req.userId!, keywords, location, dailyEmailTime, emailEnabled },
-      update: { keywords, location, dailyEmailTime, emailEnabled },
+      create: { userId: req.userId!, keywords, location, dailyEmailTime, emailEnabled, scrapeLimit: sl, matchLimit: ml },
+      update: { keywords, location, dailyEmailTime, emailEnabled, scrapeLimit: sl, matchLimit: ml },
     })
     if (emailEnabled) {
       await scheduleUserDigest(req.userId!, pref.dailyEmailTime)

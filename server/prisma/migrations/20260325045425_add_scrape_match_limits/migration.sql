@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "JobPreference" ADD COLUMN     "matchLimit" INTEGER NOT NULL DEFAULT 5,
+ADD COLUMN     "scrapeLimit" INTEGER NOT NULL DEFAULT 50;

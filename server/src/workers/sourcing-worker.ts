@@ -49,13 +49,15 @@ const worker = new Worker(
       return
     }
 
-    const { keywords, location } = user.preference
+    const { keywords, location, scrapeLimit, matchLimit } = user.preference
+    const fetchCount = scrapeLimit ?? 50
+    const topCount = matchLimit ?? 5
 
-    await progress(job, 'Scraping LinkedIn…', 20, `"${keywords}" in "${location}"`)
+    await progress(job, 'Scraping LinkedIn…', 20, `"${keywords}" in "${location}" (${fetchCount} jobs)`)
 
     let scraped
     try {
-      scraped = await scrapeLinkedInJobs(keywords, location)
+      scraped = await scrapeLinkedInJobs(keywords, location, fetchCount)
     } catch (err: any) {
       throw new Error(`LinkedIn scrape failed: ${err?.message}`)
     }
@@ -73,13 +75,13 @@ const worker = new Worker(
     })
     const sentLinks = new Set(recentHistory.flatMap((h) => h.jobLinks))
     const freshJobs = scraped.filter((j) => !sentLinks.has(j.link))
-    const jobsToMatch = freshJobs.length >= 5 ? freshJobs : scraped
+    const jobsToMatch = freshJobs.length >= topCount ? freshJobs : scraped
 
     await progress(job, 'AI matching your resume…', 60, `Analysing ${jobsToMatch.length} jobs with AI`)
 
     let matches
     try {
-      matches = await matchJobsToResume(user.profile.resumeText, jobsToMatch)
+      matches = await matchJobsToResume(user.profile.resumeText, jobsToMatch, topCount)
     } catch (err: any) {
       throw new Error(`AI matching failed: ${err?.message}`)
     }
