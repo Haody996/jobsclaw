@@ -3,6 +3,7 @@ import { Worker, Job } from 'bullmq'
 import { connection } from '../lib/queue'
 import prisma from '../lib/prisma'
 import { scrapeLinkedInJobs } from '../lib/scrape-linkedin'
+import { scrapeIndeedJobs } from '../lib/scrape-indeed'
 import { matchJobsToResume } from '../lib/match-jobs-llm'
 import { sendDigestEmail } from '../lib/send-email'
 
@@ -53,14 +54,31 @@ const worker = new Worker(
     const fetchCount = scrapeLimit ?? 50
     const topCount = matchLimit ?? 5
 
-    await progress(job, 'Scraping LinkedIn…', 20, `"${keywords}" in "${location}" (${fetchCount} jobs)`)
+    await progress(job, 'Scraping job boards…', 15, `"${keywords}" in "${location}"`)
 
-    let scraped
-    try {
-      scraped = await scrapeLinkedInJobs(keywords, location, fetchCount)
-    } catch (err: any) {
-      throw new Error(`LinkedIn scrape failed: ${err?.message}`)
+    // Split limit across sources: 60% LinkedIn, 40% Indeed
+    const linkedinLimit = Math.ceil(fetchCount * 0.6)
+    const indeedLimit = Math.ceil(fetchCount * 0.4)
+
+    const [linkedinJobs, indeedJobs] = await Promise.allSettled([
+      scrapeLinkedInJobs(keywords, location, linkedinLimit),
+      scrapeIndeedJobs(keywords, location, indeedLimit),
+    ])
+
+    const linkedinResults = linkedinJobs.status === 'fulfilled' ? linkedinJobs.value : []
+    const indeedResults = indeedJobs.status === 'fulfilled' ? indeedJobs.value : []
+
+    if (linkedinJobs.status === 'rejected') {
+      console.warn(`[sourcing-worker] LinkedIn scrape failed: ${linkedinJobs.reason?.message}`)
     }
+    if (indeedJobs.status === 'rejected') {
+      console.warn(`[sourcing-worker] Indeed scrape failed: ${indeedJobs.reason?.message}`)
+    }
+
+    const scraped = [...linkedinResults, ...indeedResults]
+
+    await progress(job, 'Scraping complete', 30,
+      `LinkedIn: ${linkedinResults.length}, Indeed: ${indeedResults.length} — ${scraped.length} total`)
 
     if (scraped.length === 0) {
       await progress(job, 'No jobs found today', 100, 'Try different keywords or location')
