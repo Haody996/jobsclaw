@@ -338,23 +338,32 @@ export default function Matches() {
                 />
               </div>
               <div className="flex items-end pb-0.5">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <div
-                    onClick={() => setPrefForm((f) => ({ ...f, emailEnabled: !f.emailEnabled }))}
-                    className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
-                      prefForm.emailEnabled ? 'bg-indigo-600' : 'bg-slate-200'
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                        prefForm.emailEnabled ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </div>
-                  <span className="text-sm font-medium text-slate-700">
-                    {prefForm.emailEnabled ? 'Daily email on' : 'Daily email off'}
-                  </span>
-                </label>
+                <button
+                  type="button"
+                  onClick={() => setPrefForm((f) => ({ ...f, emailEnabled: !f.emailEnabled }))}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    prefForm.emailEnabled
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm'
+                      : 'bg-blue-600 text-white border border-blue-600 hover:bg-blue-700 shadow-sm'
+                  }`}
+                >
+                  {prefForm.emailEnabled ? (
+                    <>
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                      </span>
+                      Daily Email Active
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      Subscribe to Daily Email
+                    </>
+                  )}
+                </button>
               </div>
             </div>
 
