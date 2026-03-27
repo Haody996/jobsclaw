@@ -19,19 +19,24 @@ export async function scrapeTheMuseJobs(
     const { data } = await axios.get(url, { timeout: 15000 })
     const results = data?.results || []
 
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000
+
     for (const r of results) {
       if (jobs.length >= limit) break
+
+      // Filter to last 24 hours
+      const published = r.publication_date ? new Date(r.publication_date).getTime() : 0
+      if (published && published < oneDayAgo) continue
+
       const title = r.name || ''
       const company = r.company?.name || ''
       const loc = r.locations?.map((l: any) => l.name).join(', ') || ''
       const link = r.refs?.landing_page || `https://www.themuse.com/jobs/${r.id}`
 
-      // Filter by keywords if title doesn't match at all
-      const kw = keywords.toLowerCase()
+      // Filter by keywords
+      const kwWords = keywords.toLowerCase().split(/[,\s]+/).filter(Boolean)
       const titleLower = title.toLowerCase()
-      const kwWords = kw.split(/[,\s]+/).filter(Boolean)
-      const matches = kwWords.some((w) => titleLower.includes(w))
-      if (!matches && kwWords.length > 0) continue
+      if (kwWords.length > 0 && !kwWords.some((w) => titleLower.includes(w))) continue
 
       if (title && company) {
         jobs.push({ title, company, link, location: loc })
