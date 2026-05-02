@@ -69,21 +69,26 @@ export default function Applications() {
           { key: 'INTERVIEWING', label: 'Interviews', value: stats.INTERVIEWING || 0, icon: TrendingUp },
           { key: 'PENDING', label: 'Pending', value: (stats.PENDING || 0) + (stats.IN_PROGRESS || 0), icon: Clock },
           { key: 'FAILED', label: 'Failed', value: stats.FAILED || 0, icon: XCircle },
-        ].map(({ key, label, value, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => { setStatusFilter(key); setPage(1) }}
-            className={`bg-white rounded-xl border p-4 text-left transition-all ${
-              statusFilter === key ? 'border-indigo-500 shadow-sm' : 'border-slate-200 hover:border-slate-300'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-slate-500">{label}</span>
-              <Icon className="w-4 h-4 text-slate-400" />
-            </div>
-            <p className="text-xl font-bold text-slate-900">{value}</p>
-          </button>
-        ))}
+        ].map(({ key, label, value, icon: Icon }) => {
+          const active = statusFilter === key
+          return (
+            <button
+              key={key}
+              onClick={() => { setStatusFilter(key); setPage(1) }}
+              className={`rounded-xl border p-4 text-left transition-all duration-150 hover:-translate-y-0.5 ${
+                active
+                  ? 'bg-gradient-to-br from-indigo-500 to-violet-500 border-transparent shadow-md shadow-indigo-200/50'
+                  : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className={`text-xs font-medium ${active ? 'text-indigo-100' : 'text-slate-500'}`}>{label}</span>
+                <Icon className={`w-4 h-4 ${active ? 'text-white/80' : 'text-slate-400'}`} />
+              </div>
+              <p className={`text-xl font-bold ${active ? 'text-white' : 'text-slate-900'}`}>{value}</p>
+            </button>
+          )
+        })}
       </div>
 
       {/* Table */}
@@ -188,7 +193,7 @@ export default function Applications() {
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="text-sm px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40"
+              className="text-sm px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 hover:shadow-sm active:scale-[0.98] disabled:opacity-40 transition-all duration-150"
             >
               Previous
             </button>
@@ -196,7 +201,7 @@ export default function Applications() {
             <button
               onClick={() => setPage((p) => p + 1)}
               disabled={(data?.applications?.length || 0) < 20}
-              className="text-sm px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40"
+              className="text-sm px-3 py-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 hover:shadow-sm active:scale-[0.98] disabled:opacity-40 transition-all duration-150"
             >
               Next
             </button>

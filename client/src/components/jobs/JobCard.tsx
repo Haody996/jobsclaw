@@ -34,7 +34,7 @@ export default function JobCard({ job }: JobCardProps) {
   const sourceColor = (SOURCE_COLORS[sourceLower] || 'default') as any
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md hover:border-indigo-200 transition-all group">
+    <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-lg hover:-translate-y-0.5 hover:border-indigo-100 transition-all duration-200 group">
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
           <a
@@ -88,7 +88,7 @@ export default function JobCard({ job }: JobCardProps) {
           href={job.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 !text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 !text-white text-sm font-medium rounded-lg hover:from-indigo-700 hover:to-violet-700 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-150"
         >
           <ExternalLink className="w-4 h-4" />
           Apply

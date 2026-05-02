@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ExternalLink, Sparkles, MapPin, Building2, CalendarDays, Inbox, Send, CheckCircle, Settings2, ChevronDown, ChevronUp, FileText, Upload } from 'lucide-react'
+import { ExternalLink, Sparkles, MapPin, Building2, CalendarDays, Inbox, Send, CheckCircle, Settings2, ChevronDown, ChevronUp, FileText, Upload, Plus, X } from 'lucide-react'
 import api from '../lib/api'
 import Spinner from '../components/ui/Spinner'
 import AutocompleteInput from '../components/ui/AutocompleteInput'
@@ -14,11 +14,16 @@ interface JobMatch {
   compatibility_score?: number
 }
 
+interface MatchSection {
+  searchTitle: string
+  matches: JobMatch[]
+}
+
 interface MatchRun {
   id: string
   runDate: string
   jobLinks: string[]
-  topMatches: JobMatch[]
+  topMatches: JobMatch[] | MatchSection[]
 }
 
 
@@ -28,7 +33,7 @@ function QuickApplyButton({ job }: { job: JobMatch }) {
       href={job.link}
       target="_blank"
       rel="noopener noreferrer"
-      className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 !text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+      className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 !text-white text-sm font-medium rounded-lg hover:from-indigo-700 hover:to-violet-700 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-150"
     >
       <ExternalLink className="w-3.5 h-3.5" />
       Apply
@@ -54,11 +59,14 @@ export default function Matches() {
   const [prefSaved, setPrefSaved] = useState(false)
   const [digestJobId, setDigestJobId] = useState<string | null>(null)
   const [resumeSuccess, setResumeSuccess] = useState(false)
+  const [extraSlots, setExtraSlots] = useState(0)
   const [prefForm, setPrefForm] = useState(() => {
     const cached = queryClient.getQueryData<any>(['preferences'])
     const p = cached?.preference
     return {
       keywords: p?.keywords || '',
+      keywords2: p?.keywords2 || '',
+      keywords3: p?.keywords3 || '',
       location: p?.location || '',
       dailyEmailTime: p?.dailyEmailTime || '09:00',
       emailEnabled: p?.emailEnabled ?? false,
@@ -76,6 +84,8 @@ export default function Matches() {
       if (data.preference) {
         setPrefForm({
           keywords: data.preference.keywords || '',
+          keywords2: data.preference.keywords2 || '',
+          keywords3: data.preference.keywords3 || '',
           location: data.preference.location || '',
           dailyEmailTime: data.preference.dailyEmailTime || '09:00',
           emailEnabled: data.preference.emailEnabled ?? false,
@@ -84,6 +94,9 @@ export default function Matches() {
         })
       }
       prefsLoaded.current = true
+      const k2 = data.preference?.keywords2 || ''
+      const k3 = data.preference?.keywords3 || ''
+      setExtraSlots(k3 ? 2 : k2 ? 1 : 0)
       return data
     },
   })
@@ -95,7 +108,7 @@ export default function Matches() {
       api.put('/preferences', prefForm).catch(() => {})
     }, 400)
     return () => clearTimeout(t)
-  }, [prefForm.keywords, prefForm.location, prefForm.emailEnabled, prefForm.dailyEmailTime, prefForm.scrapeLimit, prefForm.matchLimit])
+  }, [prefForm.keywords, prefForm.keywords2, prefForm.keywords3, prefForm.location, prefForm.emailEnabled, prefForm.dailyEmailTime, prefForm.scrapeLimit, prefForm.matchLimit])
 
   const { data: profileData } = useQuery({
     queryKey: ['profile'],
@@ -176,7 +189,17 @@ export default function Matches() {
   }
 
   const history = data?.history ?? []
-  const totalJobs = history.reduce((sum, run) => sum + run.topMatches.length, 0)
+
+  // Normalize topMatches: old runs store JobMatch[], new runs store MatchSection[]
+  function getSections(run: MatchRun): MatchSection[] {
+    if (!run.topMatches || !Array.isArray(run.topMatches) || run.topMatches.length === 0) return []
+    // Check if first element has 'searchTitle' → new sectioned format
+    if ('searchTitle' in run.topMatches[0]) return run.topMatches as MatchSection[]
+    // Legacy flat array
+    return [{ searchTitle: '', matches: run.topMatches as JobMatch[] }]
+  }
+
+  const totalJobs = history.reduce((sum, run) => getSections(run).reduce((s, sec) => s + sec.matches.length, sum), 0)
   const isRunning = !!digestJobId && digestProgress?.state !== 'completed' && digestProgress?.state !== 'failed'
 
   return (
@@ -185,7 +208,9 @@ export default function Matches() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Sparkles className="w-6 h-6 text-indigo-500" />
+            <span style={{ filter: 'drop-shadow(0 0 6px rgba(167,139,250,0.9))' }}>
+              <Sparkles className="w-6 h-6 text-violet-500" />
+            </span>
             <h1 className="text-2xl font-bold text-slate-900">AI Job Matches</h1>
           </div>
           <p className="text-sm text-slate-500">
@@ -200,14 +225,14 @@ export default function Matches() {
       </div>
 
       {/* Setup + Send panel */}
-      <div className="bg-white rounded-xl border border-slate-200 mb-6 overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-6 overflow-hidden">
         {/* Always-visible action bar */}
         <div className="flex items-center gap-3 p-4">
           <button
             onClick={() => { setDigestJobId(null); triggerDigest.mutate() }}
             disabled={isRunning || triggerDigest.isPending || !prefForm.keywords}
             title={!prefForm.keywords ? 'Set keywords first — click Setup' : 'Run AI matching now'}
-            className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+            className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-medium rounded-lg hover:from-indigo-700 hover:to-violet-700 shadow-sm hover:shadow-md active:scale-[0.97] disabled:opacity-50 transition-all duration-150 flex items-center gap-2"
           >
             {isRunning || triggerDigest.isPending ? <Spinner size="sm" /> : <Send className="w-4 h-4" />}
             {isRunning ? 'Running…' : 'Send Now'}
@@ -215,7 +240,9 @@ export default function Matches() {
 
           {prefForm.keywords ? (
             <span className="text-sm text-slate-600 truncate flex-1">
-              <span className="font-medium">{prefForm.keywords}</span>
+              <span className="font-medium">
+                {[prefForm.keywords, prefForm.keywords2, prefForm.keywords3].filter(Boolean).join(' / ')}
+              </span>
               {prefForm.location && <span className="text-slate-400"> · {prefForm.location}</span>}
             </span>
           ) : (
@@ -243,11 +270,12 @@ export default function Matches() {
                 <span className="text-xs text-slate-500">{digestProgress.progress.percent}%</span>
               )}
             </div>
-            <div className="w-full bg-slate-200 rounded-full h-1.5 mb-1.5">
+            <div className="w-full bg-slate-200 rounded-full h-2.5 mb-1.5">
               <div
-                className={`h-1.5 rounded-full transition-all duration-500 ${
+                className={`h-2.5 rounded-full transition-all duration-500 ${
                   digestProgress.state === 'failed' ? 'bg-red-500' :
-                  digestProgress.state === 'completed' ? 'bg-green-500' : 'bg-indigo-500'
+                  digestProgress.state === 'completed' ? 'bg-gradient-to-r from-emerald-500 to-teal-400' :
+                  'bg-gradient-to-r from-indigo-500 to-violet-500'
                 }`}
                 style={{ width: `${digestProgress.progress?.percent ?? 0}%` }}
               />
@@ -307,17 +335,80 @@ export default function Matches() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1.5">Job Keywords</label>
-                <AutocompleteInput
-                  type="job"
-                  value={prefForm.keywords}
-                  onChange={(v) => setPrefForm((f) => ({ ...f, keywords: v }))}
-                  placeholder="e.g. software engineer, react developer"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+            {/* Job title searches (up to 3) */}
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-slate-700 mb-1.5">Job Titles (up to 3 — each runs a separate search)</label>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-indigo-500 w-4 text-center">1</span>
+                  <AutocompleteInput
+                    type="job"
+                    value={prefForm.keywords}
+                    onChange={(v) => setPrefForm((f) => ({ ...f, keywords: v }))}
+                    placeholder="e.g. software engineer"
+                    className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                {extraSlots >= 1 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-indigo-500 w-4 text-center">2</span>
+                    <AutocompleteInput
+                      type="job"
+                      value={prefForm.keywords2}
+                      onChange={(v) => setPrefForm((f) => ({ ...f, keywords2: v }))}
+                      placeholder="e.g. frontend developer"
+                      className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPrefForm((f) => ({ ...f, keywords2: f.keywords3, keywords3: '' }))
+                        setExtraSlots((s) => s - 1)
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                      title="Remove"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+                {extraSlots >= 2 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-indigo-500 w-4 text-center">3</span>
+                    <AutocompleteInput
+                      type="job"
+                      value={prefForm.keywords3}
+                      onChange={(v) => setPrefForm((f) => ({ ...f, keywords3: v }))}
+                      placeholder="e.g. data analyst"
+                      className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPrefForm((f) => ({ ...f, keywords3: '' }))
+                        setExtraSlots(1)
+                      }}
+                      className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                      title="Remove"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+                {extraSlots < 2 && prefForm.keywords && (
+                  <button
+                    type="button"
+                    onClick={() => setExtraSlots((s) => s + 1)}
+                    className="flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-800 font-medium ml-6 mt-1 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add another job title
+                  </button>
+                )}
               </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">Location</label>
                 <AutocompleteInput
@@ -412,7 +503,7 @@ export default function Matches() {
             <button
               onClick={() => savePreferences.mutate()}
               disabled={savePreferences.isPending}
-              className="px-5 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors flex items-center gap-2"
+              className="px-5 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-medium rounded-lg hover:from-indigo-700 hover:to-violet-700 shadow-sm hover:shadow-md active:scale-[0.97] disabled:opacity-60 transition-all duration-150 flex items-center gap-2"
             >
               {savePreferences.isPending ? <Spinner size="sm" /> : prefSaved ? <CheckCircle className="w-4 h-4" /> : null}
               {prefSaved ? 'Saved!' : 'Save Settings'}
@@ -440,78 +531,107 @@ export default function Matches() {
 
       {/* Match runs */}
       <div className="space-y-8">
-        {history.map((run) => (
-          <section key={run.id}>
-            <div className="flex items-center gap-2 mb-3">
-              <CalendarDays className="w-4 h-4 text-slate-400" />
-              <span className="text-sm font-semibold text-slate-600">{formatDate(run.runDate)}</span>
-              <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                {run.topMatches.length} match{run.topMatches.length !== 1 ? 'es' : ''}
-              </span>
-            </div>
+        {history.map((run) => {
+          const sections = getSections(run)
+          const runTotal = sections.reduce((s, sec) => s + sec.matches.length, 0)
+          return (
+            <section key={run.id}>
+              <div className="flex items-center gap-3 bg-gradient-to-r from-slate-50 to-white border border-slate-200 rounded-xl px-4 py-3 mb-4 shadow-sm">
+                <CalendarDays className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+                <span className="text-sm font-semibold text-slate-700">{formatDate(run.runDate)}</span>
+                <span className="text-xs font-medium text-slate-500 bg-white border border-slate-200 px-2.5 py-0.5 rounded-full ml-auto shadow-sm">
+                  {runTotal} match{runTotal !== 1 ? 'es' : ''}
+                </span>
+              </div>
 
-            <div className="grid gap-3">
-              {run.topMatches.map((job, i) => (
-                <div
-                  key={i}
-                  className="bg-white rounded-xl border border-slate-200 p-5 hover:border-indigo-200 hover:shadow-sm transition-all"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-3 mb-1">
-                        <a
-                          href={job.link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="group flex items-center gap-1.5"
-                        >
-                          <h3 className="text-base font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors truncate">
-                            {job.title}
-                          </h3>
-                          <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-500 flex-shrink-0 transition-colors" />
-                        </a>
-                        {job.compatibility_score != null && (() => {
-                          const score = (job.compatibility_score / 10).toFixed(1)
-                          return (
-                            <span className={`flex-shrink-0 text-xs font-bold px-2.5 py-1 rounded-full ${
-                              job.compatibility_score >= 85
-                                ? 'bg-green-100 text-green-700'
-                                : job.compatibility_score >= 65
-                                ? 'bg-yellow-100 text-yellow-700'
-                                : 'bg-slate-100 text-slate-600'
-                            }`}>
-                              {score} / 10
-                            </span>
-                          )
-                        })()}
+              <div className="space-y-5">
+                {sections.map((section, si) => (
+                  <div key={si}>
+                    {/* Section header — only if there's a searchTitle (multi-search) */}
+                    {section.searchTitle && (
+                      <div className="flex items-center gap-2.5 mb-3 mt-1">
+                        <span className="text-xs font-bold text-white bg-gradient-to-br from-indigo-500 to-violet-500 w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">{si + 1}</span>
+                        <h3 className="text-xs font-semibold text-slate-600 uppercase tracking-widest">{section.searchTitle}</h3>
+                        <div className="flex-1 h-px bg-slate-200" />
+                        <span className="text-xs text-slate-400">{section.matches.length} match{section.matches.length !== 1 ? 'es' : ''}</span>
                       </div>
+                    )}
+                    {section.matches.length === 0 ? (
+                      <p className="text-sm text-slate-400 ml-7 mb-2">No matches found for this search</p>
+                    ) : (
+                      <div className="grid gap-3">
+                        {section.matches.map((job, i) => (
+                          <div
+                            key={i}
+                            className={`bg-white rounded-xl border border-slate-200 border-l-4 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 ${
+                              job.compatibility_score != null && job.compatibility_score >= 85
+                                ? 'border-l-emerald-400'
+                                : job.compatibility_score != null && job.compatibility_score >= 65
+                                ? 'border-l-amber-400'
+                                : 'border-l-slate-300'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between gap-3 mb-1">
+                                  <a
+                                    href={job.link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="group flex items-center gap-1.5"
+                                  >
+                                    <h3 className="text-base font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors truncate">
+                                      {job.title}
+                                    </h3>
+                                    <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-500 flex-shrink-0 transition-colors" />
+                                  </a>
+                                  {job.compatibility_score != null && (() => {
+                                    const score = (job.compatibility_score / 10).toFixed(1)
+                                    return (
+                                      <span className={`flex-shrink-0 text-xs font-bold px-2.5 py-1 rounded-full ring-1 ${
+                                        job.compatibility_score >= 85
+                                          ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                                          : job.compatibility_score >= 65
+                                          ? 'bg-amber-50 text-amber-700 ring-amber-200'
+                                          : 'bg-slate-100 text-slate-600 ring-slate-200'
+                                      }`}>
+                                        {score} / 10
+                                      </span>
+                                    )
+                                  })()}
+                                </div>
 
-                      <div className="flex items-center gap-3 mb-3">
-                        <span className="flex items-center gap-1 text-sm text-slate-600 font-medium">
-                          <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                          {job.company}
-                        </span>
-                        {job.location && (
-                          <span className="flex items-center gap-1 text-sm text-slate-500">
-                            <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                            {job.location}
-                          </span>
-                        )}
+                                <div className="flex items-center gap-3 mb-3">
+                                  <span className="flex items-center gap-1 text-sm text-slate-600 font-medium">
+                                    <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                                    {job.company}
+                                  </span>
+                                  {job.location && (
+                                    <span className="flex items-center gap-1 text-sm text-slate-500">
+                                      <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                                      {job.location}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex items-start gap-2">
+                                  <Sparkles className="w-3.5 h-3.5 text-indigo-400 mt-0.5 flex-shrink-0" />
+                                  <p className="text-sm text-slate-600 leading-relaxed">{job.match_rationale}</p>
+                                </div>
+                              </div>
+
+                              <QuickApplyButton job={job} />
+                            </div>
+                          </div>
+                        ))}
                       </div>
-
-                      <div className="flex items-start gap-2">
-                        <Sparkles className="w-3.5 h-3.5 text-indigo-400 mt-0.5 flex-shrink-0" />
-                        <p className="text-sm text-slate-600 leading-relaxed">{job.match_rationale}</p>
-                      </div>
-                    </div>
-
-                    <QuickApplyButton job={job} />
+                    )}
                   </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        ))}
+                ))}
+              </div>
+            </section>
+          )
+        })}
       </div>
     </div>
   )

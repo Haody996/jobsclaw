@@ -51,24 +51,24 @@ export default function Dashboard() {
   return (
     <div className="p-8">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900 mb-1">Dashboard</h1>
-        <p className="text-slate-500">Find and apply to jobs automatically</p>
+      <div className="mb-8 px-7 py-6 rounded-2xl bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600 shadow-lg shadow-indigo-200/60">
+        <h1 className="text-2xl font-bold text-white mb-1">Dashboard</h1>
+        <p className="text-indigo-200 text-sm">Find and apply to jobs automatically</p>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4 mb-8">
         {[
-          { label: 'Total Applied', value: total, icon: Send, color: 'text-indigo-600 bg-indigo-50' },
-          { label: 'Submitted', value: submitted, icon: CheckCircle, color: 'text-green-600 bg-green-50' },
-          { label: 'In Progress', value: pending, icon: Clock, color: 'text-blue-600 bg-blue-50' },
-          { label: 'Interviews', value: stats.INTERVIEWING || 0, icon: TrendingUp, color: 'text-purple-600 bg-purple-50' },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="bg-white rounded-xl border border-slate-200 p-5">
+          { label: 'Total Applied', value: total, icon: Send, grad: 'from-indigo-500 to-violet-500' },
+          { label: 'Submitted', value: submitted, icon: CheckCircle, grad: 'from-emerald-500 to-teal-400' },
+          { label: 'In Progress', value: pending, icon: Clock, grad: 'from-blue-500 to-cyan-400' },
+          { label: 'Interviews', value: stats.INTERVIEWING || 0, icon: TrendingUp, grad: 'from-violet-500 to-purple-500' },
+        ].map(({ label, value, icon: Icon, grad }) => (
+          <div key={label} className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm text-slate-500">{label}</span>
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${color}`}>
-                <Icon className="w-4 h-4" />
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-br ${grad} shadow-sm`}>
+                <Icon className="w-4 h-4 text-white" />
               </div>
             </div>
             <p className="text-2xl font-bold text-slate-900">{value as number}</p>
@@ -77,7 +77,7 @@ export default function Dashboard() {
       </div>
 
       {/* Search bar */}
-      <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
         <h2 className="text-sm font-semibold text-slate-700 mb-3">Quick Search</h2>
         <div className="flex gap-3">
           <div className="flex-1">
@@ -90,7 +90,7 @@ export default function Dashboard() {
           </div>
           <button
             onClick={() => handleSearchNavigate(query, location)}
-            className="px-4 py-2.5 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors"
+            className="px-4 py-2.5 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm active:scale-[0.98] transition-all duration-150"
           >
             Advanced Search
           </button>
@@ -107,7 +107,7 @@ export default function Dashboard() {
                 else if (chip === 'Last 24h') navigate('/jobs?datePosted=today')
                 else navigate(`/jobs?location=${encodeURIComponent(chip)}`)
               }}
-              className="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-full hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+              className="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-medium rounded-full hover:bg-indigo-50 hover:text-indigo-700 hover:shadow-sm active:scale-95 transition-all duration-150"
             >
               {chip}
             </button>
@@ -122,9 +122,10 @@ export default function Dashboard() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate('/jobs')}
-              className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+              className="text-sm text-indigo-600 hover:text-indigo-800 font-medium group inline-flex items-center gap-1"
             >
-              View all →
+              View all
+              <span className="group-hover:translate-x-1 transition-transform duration-150 inline-block">→</span>
             </button>
           </div>
         </div>
