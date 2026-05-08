@@ -557,23 +557,29 @@ export default function Matches() {
                     <button
                       type="button"
                       onClick={() => setPrefForm((f) => ({ ...f, emailEnabled: !f.emailEnabled }))}
-                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 active:scale-[0.97] ${
+                      className={`relative inline-flex items-center gap-3 rounded-xl font-semibold transition-all duration-150 active:scale-[0.97] overflow-hidden ${
                         prefForm.emailEnabled
-                          ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-white border-transparent shadow-md shadow-emerald-300/50 hover:from-emerald-600 hover:to-teal-500 hover:shadow-lg hover:shadow-emerald-300/60'
-                          : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-transparent shadow-sm hover:from-blue-700 hover:to-indigo-700 hover:shadow-md'
+                          ? 'px-5 py-3 text-sm bg-gradient-to-r from-emerald-500 to-teal-400 text-white shadow-lg shadow-emerald-300/50 hover:from-emerald-600 hover:to-teal-500 hover:shadow-xl hover:shadow-emerald-300/60'
+                          : 'px-4 py-2 text-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm hover:from-blue-700 hover:to-indigo-700 hover:shadow-md'
                       }`}
                     >
+                      {/* Shine sweep overlay */}
+                      {prefForm.emailEnabled && (
+                        <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/15 to-transparent -skew-x-12 pointer-events-none" />
+                      )}
                       {prefForm.emailEnabled ? (
                         <>
-                          <span className="relative flex h-2.5 w-2.5">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-60" />
-                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white" />
+                          {/* Ripple rings */}
+                          <span className="relative flex h-3.5 w-3.5 flex-shrink-0">
+                            <span className="ripple-ring absolute inset-0 rounded-full bg-white/50" />
+                            <span className="ripple-ring-delay absolute inset-0 rounded-full bg-white/30" />
+                            <span className="relative inline-flex h-3.5 w-3.5 rounded-full bg-white shadow-sm" />
                           </span>
-                          Daily Email Active
+                          <span>Daily Email Active</span>
                         </>
                       ) : (
                         <>
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                           </svg>
                           Subscribe to Daily Email
