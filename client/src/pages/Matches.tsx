@@ -557,17 +557,17 @@ export default function Matches() {
                     <button
                       type="button"
                       onClick={() => setPrefForm((f) => ({ ...f, emailEnabled: !f.emailEnabled }))}
-                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 active:scale-[0.97] ${
                         prefForm.emailEnabled
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm'
-                          : 'bg-blue-600 text-white border border-blue-600 hover:bg-blue-700 shadow-sm'
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-white border-transparent shadow-md shadow-emerald-300/50 hover:from-emerald-600 hover:to-teal-500 hover:shadow-lg hover:shadow-emerald-300/60'
+                          : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-transparent shadow-sm hover:from-blue-700 hover:to-indigo-700 hover:shadow-md'
                       }`}
                     >
                       {prefForm.emailEnabled ? (
                         <>
                           <span className="relative flex h-2.5 w-2.5">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-60" />
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white" />
                           </span>
                           Daily Email Active
                         </>
@@ -616,14 +616,25 @@ export default function Matches() {
             </div>
 
             {authed ? (
-              <button
-                onClick={() => savePreferences.mutate()}
-                disabled={savePreferences.isPending}
-                className="px-5 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-medium rounded-lg hover:from-indigo-700 hover:to-violet-700 shadow-sm hover:shadow-md active:scale-[0.97] disabled:opacity-60 transition-all duration-150 flex items-center gap-2"
-              >
-                {savePreferences.isPending ? <Spinner size="sm" /> : prefSaved ? <CheckCircle className="w-4 h-4" /> : null}
-                {prefSaved ? 'Saved!' : 'Save Settings'}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => savePreferences.mutate()}
+                  disabled={savePreferences.isPending}
+                  className="px-5 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-medium rounded-lg hover:from-indigo-700 hover:to-violet-700 shadow-sm hover:shadow-md active:scale-[0.97] disabled:opacity-60 transition-all duration-150 flex items-center gap-2"
+                >
+                  {savePreferences.isPending ? <Spinner size="sm" /> : prefSaved ? <CheckCircle className="w-4 h-4" /> : null}
+                  {prefSaved ? 'Saved!' : 'Save Settings'}
+                </button>
+                <button
+                  onClick={() => { setDigestJobId(null); triggerDigest.mutate() }}
+                  disabled={isRunning || triggerDigest.isPending || !prefForm.keywords}
+                  title={!prefForm.keywords ? 'Set keywords first' : 'Run AI matching now'}
+                  className="px-4 py-2 bg-gradient-to-r from-violet-500 to-purple-500 text-white text-sm font-medium rounded-lg hover:from-violet-600 hover:to-purple-600 shadow-sm hover:shadow-md active:scale-[0.97] disabled:opacity-50 transition-all duration-150 flex items-center gap-2"
+                >
+                  {isRunning || triggerDigest.isPending ? <Spinner size="sm" /> : <Send className="w-4 h-4" />}
+                  {isRunning ? 'Running…' : 'Send Now'}
+                </button>
+              </div>
             ) : (
               <p className="text-xs text-slate-400">
                 Settings saved in your browser.{' '}
