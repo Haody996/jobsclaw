@@ -6,6 +6,8 @@ import { scrapeLinkedInJobs } from '../lib/scrape-linkedin'
 import { scrapeTheMuseJobs, scrapeArbeitnowJobs } from '../lib/scrape-indeed'
 import { matchJobsToResume } from '../lib/match-jobs-llm'
 import { sendDigestEmail } from '../lib/send-email'
+import type { ScrapedJob } from '../lib/scrape-linkedin'
+import type { JobMatch, MatchSection } from '../lib/match-jobs-llm'
 
 interface Progress {
   step: string
@@ -19,10 +21,105 @@ async function progress(job: Job, step: string, percent: number, detail?: string
   console.log(`[sourcing-worker] [${job.id}] ${percent}% — ${step}${detail ? `: ${detail}` : ''}`)
 }
 
+async function scrapeForKeywords(keywords: string, location: string, fetchCount: number): Promise<ScrapedJob[]> {
+  const [linkedinJobs, museJobs, arbeitnowJobs] = await Promise.allSettled([
+    scrapeLinkedInJobs(keywords, location, fetchCount),
+    scrapeTheMuseJobs(keywords, location, 20),
+    scrapeArbeitnowJobs(keywords, location, 20),
+  ])
+
+  const linkedinResults = linkedinJobs.status === 'fulfilled' ? linkedinJobs.value : []
+  const museResults = museJobs.status === 'fulfilled' ? museJobs.value : []
+  const arbeitnowResults = arbeitnowJobs.status === 'fulfilled' ? arbeitnowJobs.value : []
+
+  if (linkedinJobs.status === 'rejected') console.warn(`[sourcing-worker] LinkedIn failed for "${keywords}": ${linkedinJobs.reason?.message}`)
+  if (museJobs.status === 'rejected') console.warn(`[sourcing-worker] The Muse failed for "${keywords}": ${museJobs.reason?.message}`)
+  if (arbeitnowJobs.status === 'rejected') console.warn(`[sourcing-worker] Arbeitnow failed for "${keywords}": ${arbeitnowJobs.reason?.message}`)
+
+  // Deduplicate by normalized title+company
+  const seen = new Set<string>()
+  return [...linkedinResults, ...museResults, ...arbeitnowResults].filter((j) => {
+    const key = `${j.title.toLowerCase().trim()}|${j.company.toLowerCase().trim()}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+interface GuestData {
+  email: string
+  keywords: string
+  keywords2: string
+  keywords3: string
+  location: string
+  scrapeLimit: number
+  matchLimit: number
+}
+
+async function runGuestDigest(job: Job, guest: GuestData) {
+  const { email, keywords, keywords2, keywords3, location, scrapeLimit, matchLimit } = guest
+  const fetchCount = scrapeLimit ?? 50
+  const topCount = matchLimit ?? 5
+  const keywordSets = [keywords, keywords2, keywords3].filter((kw) => kw && kw.trim())
+
+  await progress(job, 'Starting your search…', 5)
+
+  const sections: MatchSection[] = []
+
+  for (let i = 0; i < keywordSets.length; i++) {
+    const kw = keywordSets[i]
+    const pctBase = 10 + Math.floor((i / keywordSets.length) * 70)
+
+    await progress(job, `Scraping for "${kw}"…`, pctBase, `Search ${i + 1} of ${keywordSets.length}`)
+    const scraped = await scrapeForKeywords(kw, location, fetchCount)
+
+    if (scraped.length === 0) {
+      sections.push({ searchTitle: kw, matches: [] })
+      continue
+    }
+
+    await progress(job, `AI matching for "${kw}"…`, pctBase + 20, `${scraped.length} jobs`)
+
+    // Use the job title + location as a stand-in for the resume so guests still get AI ranking
+    const roleDescription = `Candidate is seeking a ${kw} position${location ? ` in ${location}` : ''}. Select the most relevant and high-quality job listings.`
+
+    let matches: JobMatch[]
+    try {
+      matches = await matchJobsToResume(roleDescription, scraped.slice(0, fetchCount), topCount)
+    } catch (err: any) {
+      console.warn(`[sourcing-worker] Guest AI matching failed for "${kw}": ${err?.message}`)
+      sections.push({ searchTitle: kw, matches: [] })
+      continue
+    }
+
+    sections.push({ searchTitle: kw, matches })
+  }
+
+  const totalMatches = sections.reduce((s, sec) => s + sec.matches.length, 0)
+  if (totalMatches === 0) {
+    await progress(job, 'No jobs found', 100, 'Try different keywords or location')
+    return
+  }
+
+  await progress(job, 'Sending your results…', 92)
+
+  const firstName = email.split('@')[0]
+  await sendDigestEmail(email, firstName, sections, location)
+
+  await progress(job, 'Done! Check your inbox.', 100, `Sent ${totalMatches} matches to ${email}`)
+}
+
 const worker = new Worker(
   'job-sourcing',
   async (job) => {
-    const { userId, manual } = job.data as { userId: string; manual?: boolean }
+    const data = job.data as { userId?: string; manual?: boolean; guest?: GuestData }
+
+    if (data.guest) {
+      await runGuestDigest(job, data.guest)
+      return
+    }
+
+    const { userId, manual } = data as { userId: string; manual?: boolean }
 
     await progress(job, 'Loading your profile…', 5)
 
@@ -50,69 +147,70 @@ const worker = new Worker(
       return
     }
 
-    const { keywords, location, scrapeLimit, matchLimit } = user.preference
+    const { keywords, keywords2, keywords3, location, scrapeLimit, matchLimit } = user.preference
     const fetchCount = scrapeLimit ?? 50
     const topCount = matchLimit ?? 5
 
-    await progress(job, 'Scraping job boards…', 15, `"${keywords}" in "${location}"`)
-
-    const [linkedinJobs, museJobs, arbeitnowJobs] = await Promise.allSettled([
-      scrapeLinkedInJobs(keywords, location, fetchCount),
-      scrapeTheMuseJobs(keywords, location, 20),
-      scrapeArbeitnowJobs(keywords, location, 20),
-    ])
-
-    const linkedinResults = linkedinJobs.status === 'fulfilled' ? linkedinJobs.value : []
-    const museResults = museJobs.status === 'fulfilled' ? museJobs.value : []
-    const arbeitnowResults = arbeitnowJobs.status === 'fulfilled' ? arbeitnowJobs.value : []
-
-    if (linkedinJobs.status === 'rejected') console.warn(`[sourcing-worker] LinkedIn failed: ${linkedinJobs.reason?.message}`)
-    if (museJobs.status === 'rejected') console.warn(`[sourcing-worker] The Muse failed: ${museJobs.reason?.message}`)
-    if (arbeitnowJobs.status === 'rejected') console.warn(`[sourcing-worker] Arbeitnow failed: ${arbeitnowJobs.reason?.message}`)
-
-    // Deduplicate by normalized title+company
-    const seen = new Set<string>()
-    const scraped = [...linkedinResults, ...museResults, ...arbeitnowResults].filter((j) => {
-      const key = `${j.title.toLowerCase().trim()}|${j.company.toLowerCase().trim()}`
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-
-    const sources = [`LinkedIn: ${linkedinResults.length}`, `Muse: ${museResults.length}`, `Arbeitnow: ${arbeitnowResults.length}`].join(', ')
-    await progress(job, 'Scraping complete', 30, `${sources} — ${scraped.length} unique`)
-
-    if (scraped.length === 0) {
-      await progress(job, 'No jobs found today', 100, 'Try different keywords or location')
-      return
-    }
-
-    await progress(job, 'Filtering duplicates…', 45, `${scraped.length} jobs scraped`)
+    // Collect active keyword sets (up to 3)
+    const keywordSets = [keywords, keywords2, keywords3].filter((kw) => kw && kw.trim())
 
     const recentHistory = await prisma.jobMatchHistory.findMany({
       where: { userId, runDate: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
       select: { jobLinks: true },
     })
     const sentLinks = new Set(recentHistory.flatMap((h) => h.jobLinks))
-    const freshJobs = scraped.filter((j) => !sentLinks.has(j.link))
-    const jobsToMatch = freshJobs.length >= topCount ? freshJobs : scraped
 
-    await progress(job, 'AI matching your resume…', 60, `Analysing ${jobsToMatch.length} jobs with AI`)
+    const sections: MatchSection[] = []
+    const allLinks: string[] = []
 
-    let matches
-    try {
-      matches = await matchJobsToResume(user.profile.resumeText, jobsToMatch, topCount)
-    } catch (err: any) {
-      throw new Error(`AI matching failed: ${err?.message}`)
+    for (let i = 0; i < keywordSets.length; i++) {
+      const kw = keywordSets[i]
+      const pctBase = 10 + Math.floor((i / keywordSets.length) * 70)
+
+      await progress(job, `Scraping for "${kw}"…`, pctBase, `Search ${i + 1} of ${keywordSets.length}`)
+
+      const scraped = await scrapeForKeywords(kw, location, fetchCount)
+
+      if (scraped.length === 0) {
+        sections.push({ searchTitle: kw, matches: [] })
+        continue
+      }
+
+      await progress(job, `Filtering duplicates for "${kw}"…`, pctBase + 10)
+
+      const freshJobs = scraped.filter((j) => !sentLinks.has(j.link))
+      const jobsToMatch = freshJobs.length >= topCount ? freshJobs : scraped
+
+      await progress(job, `AI matching for "${kw}"…`, pctBase + 20, `${jobsToMatch.length} jobs`)
+
+      let matches: JobMatch[]
+      try {
+        matches = await matchJobsToResume(user.profile!.resumeText!, jobsToMatch, topCount)
+      } catch (err: any) {
+        console.warn(`[sourcing-worker] AI matching failed for "${kw}": ${err?.message}`)
+        sections.push({ searchTitle: kw, matches: [] })
+        continue
+      }
+
+      sections.push({ searchTitle: kw, matches })
+      allLinks.push(...matches.map((m) => m.link))
+      // Add matched links to sentLinks so subsequent searches don't repeat
+      matches.forEach((m) => sentLinks.add(m.link))
     }
 
-    await progress(job, 'Saving results…', 85, `${matches.length} top matches selected`)
+    const totalMatches = sections.reduce((s, sec) => s + sec.matches.length, 0)
+    if (totalMatches === 0) {
+      await progress(job, 'No jobs found today', 100, 'Try different keywords or location')
+      return
+    }
+
+    await progress(job, 'Saving results…', 85, `${totalMatches} total matches across ${keywordSets.length} search(es)`)
 
     await prisma.jobMatchHistory.create({
       data: {
         userId,
-        jobLinks: matches.map((m) => m.link),
-        topMatches: matches as any,
+        jobLinks: allLinks,
+        topMatches: sections as any,
       },
     })
 
@@ -121,12 +219,11 @@ const worker = new Worker(
     await sendDigestEmail(
       user.email,
       user.profile.firstName || user.email.split('@')[0],
-      matches,
-      keywords,
+      sections,
       location
     )
 
-    await progress(job, 'Done! Check your inbox.', 100, `Sent ${matches.length} matches to ${user.email}`)
+    await progress(job, 'Done! Check your inbox.', 100, `Sent ${totalMatches} matches to ${user.email}`)
   },
   { connection, concurrency: 5 }
 )

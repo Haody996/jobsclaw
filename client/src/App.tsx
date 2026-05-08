@@ -37,7 +37,7 @@ function AppRoutes() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="jobs" element={<Jobs />} />
-          <Route path="matches" element={<PrivateRoute><Matches /></PrivateRoute>} />
+          <Route path="matches" element={<Matches />} />
           <Route path="profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
           <Route path="applications" element={<PrivateRoute><Applications /></PrivateRoute>} />
           <Route path="admin" element={<PrivateRoute><Admin /></PrivateRoute>} />

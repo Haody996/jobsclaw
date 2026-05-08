@@ -4,10 +4,10 @@ import { LayoutDashboard, FileText, User, LogOut, LogIn, Sparkles, Menu, X, Shie
 import { clearAuth, isAuthenticated, isAdmin } from '../../lib/auth'
 
 const navItems = [
-  { to: '/matches', label: 'AI Matches', icon: Sparkles },
+  { to: '/matches', label: 'AI Matches', icon: Sparkles, exact: false },
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
-  { to: '/applications', label: 'Applications', icon: FileText },
-  { to: '/profile', label: 'Profile', icon: User },
+  { to: '/applications', label: 'Applications', icon: FileText, exact: false },
+  { to: '/profile', label: 'Profile', icon: User, exact: false },
 ]
 
 const adminNavItem = { to: '/admin', label: 'Admin', icon: ShieldCheck, exact: false }
