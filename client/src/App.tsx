@@ -20,7 +20,7 @@ const queryClient = new QueryClient({
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   if (!isAuthenticated()) {
-    return <Navigate to="/login" state={{ backgroundLocation: { pathname: '/' } }} replace />
+    return <Navigate to="/login" state={{ backgroundLocation: { pathname: '/matches' } }} replace />
   }
   return <>{children}</>
 }
@@ -35,7 +35,8 @@ function AppRoutes() {
       <Routes location={background ?? location}>
         <Route path="/info" element={<Info />} />
         <Route path="/" element={<Layout />}>
-          <Route index element={<Dashboard />} />
+          <Route index element={<Navigate to="/matches" replace />} />
+          <Route path="dashboard" element={<Dashboard />} />
           <Route path="jobs" element={<Jobs />} />
           <Route path="matches" element={<Matches />} />
           <Route path="profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
@@ -43,8 +44,8 @@ function AppRoutes() {
           <Route path="admin" element={<PrivateRoute><Admin /></PrivateRoute>} />
         </Route>
         {/* Direct /login or /register with no background → redirect to home */}
-        <Route path="/login" element={<Navigate to="/" replace />} />
-        <Route path="/register" element={<Navigate to="/" replace />} />
+        <Route path="/login" element={<Navigate to="/matches" replace />} />
+        <Route path="/register" element={<Navigate to="/matches" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 

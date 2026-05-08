@@ -54,6 +54,7 @@ interface GuestData {
   location: string
   scrapeLimit: number
   matchLimit: number
+  resumeText?: string
 }
 
 async function runGuestDigest(job: Job, guest: GuestData) {
@@ -80,8 +81,10 @@ async function runGuestDigest(job: Job, guest: GuestData) {
 
     await progress(job, `AI matching for "${kw}"…`, pctBase + 20, `${scraped.length} jobs`)
 
-    // Use the job title + location as a stand-in for the resume so guests still get AI ranking
-    const roleDescription = `Candidate is seeking a ${kw} position${location ? ` in ${location}` : ''}. Select the most relevant and high-quality job listings.`
+    // Use real resume text if provided, otherwise fall back to keyword-based proxy
+    const roleDescription = guest.resumeText && guest.resumeText.length > 100
+      ? guest.resumeText
+      : `Candidate is seeking a ${kw} position${location ? ` in ${location}` : ''}. Select the most relevant and high-quality job listings.`
 
     let matches: JobMatch[]
     try {

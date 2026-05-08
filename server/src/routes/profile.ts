@@ -40,6 +40,26 @@ router.put('/', authMiddleware, async (req: AuthRequest, res: Response): Promise
   res.json(profile)
 })
 
+// POST /api/profile/resume/guest — no auth, extract text and return it without storing
+router.post('/resume/guest', upload.single('resume'), async (req, res: Response): Promise<void> => {
+  if (!req.file) { res.status(400).json({ error: 'No file uploaded' }); return }
+
+  let resumeText = ''
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { PDFParse } = require('pdf-parse') as { PDFParse: new (opts: { url: string }) => { getText(): Promise<{ text: string }> } }
+    const absPath = require('path').resolve(req.file.path)
+    const result = await new PDFParse({ url: `file://${absPath}` }).getText()
+    resumeText = result.text
+  } catch (err) {
+    console.warn('PDF text extraction failed (guest):', err)
+  } finally {
+    try { fs.unlinkSync(req.file.path) } catch {}
+  }
+
+  res.json({ resumeText, hasText: !!resumeText })
+})
+
 // POST /api/profile/resume
 router.post('/resume', authMiddleware, upload.single('resume'), async (req: AuthRequest, res: Response): Promise<void> => {
   if (!req.file) {

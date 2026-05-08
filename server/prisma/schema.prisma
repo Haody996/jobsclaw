@@ -85,6 +85,8 @@ model JobPreference {
   userId         String   @unique
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   keywords       String   @default("")
+  keywords2      String   @default("")
+  keywords3      String   @default("")
   location       String   @default("")
   dailyEmailTime String   @default("09:00")
   emailEnabled   Boolean  @default(false)

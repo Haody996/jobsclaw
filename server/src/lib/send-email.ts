@@ -1,14 +1,8 @@
 import nodemailer from 'nodemailer'
-import type { JobMatch } from './match-jobs-llm'
+import type { JobMatch, MatchSection } from './match-jobs-llm'
 
-function buildEmailHtml(
-  firstName: string,
-  matches: JobMatch[],
-  keywords: string,
-  location: string,
-  clientUrl: string
-): string {
-  const jobRows = matches
+function buildJobRows(matches: JobMatch[]): string {
+  return matches
     .map((job, i) => {
       const score = job.compatibility_score != null
         ? (job.compatibility_score / 10).toFixed(1)
@@ -41,6 +35,35 @@ function buildEmailHtml(
       </tr>`
     })
     .join('')
+}
+
+function buildSectionHtml(section: MatchSection): string {
+  if (section.matches.length === 0) {
+    return `
+    <div style="padding:16px 24px; border-bottom:2px solid #e2e8f0;">
+      <h2 style="margin:0 0 4px; font-size:16px; font-weight:700; color:#4f46e5;">${section.searchTitle}</h2>
+      <p style="margin:0; font-size:13px; color:#94a3b8;">No matches found for this search</p>
+    </div>`
+  }
+  return `
+    <div style="padding:16px 24px 0; border-bottom:2px solid #e2e8f0;">
+      <h2 style="margin:0 0 4px; font-size:16px; font-weight:700; color:#4f46e5;">${section.searchTitle}</h2>
+      <p style="margin:0 0 8px; font-size:13px; color:#94a3b8;">${section.matches.length} match${section.matches.length !== 1 ? 'es' : ''}</p>
+    </div>
+    <table style="width:100%; border-collapse:collapse;">
+      ${buildJobRows(section.matches)}
+    </table>`
+}
+
+function buildEmailHtml(
+  firstName: string,
+  sections: MatchSection[],
+  location: string,
+  clientUrl: string
+): string {
+  const totalMatches = sections.reduce((s, sec) => s + sec.matches.length, 0)
+  const searchTitles = sections.map((s) => s.searchTitle).join(', ')
+  const sectionBlocks = sections.map(buildSectionHtml).join('')
 
   return `<!DOCTYPE html>
 <html>
@@ -54,7 +77,7 @@ function buildEmailHtml(
         Your Daily Job Digest
       </h1>
       <p style="margin:6px 0 0; font-size:14px; color:#c7d2fe;">
-        Top ${matches.length} matches for <strong>${keywords}</strong> in <strong>${location}</strong>
+        ${totalMatches} matches across ${sections.length} search${sections.length !== 1 ? 'es' : ''}${location ? ` in <strong>${location}</strong>` : ''}
       </p>
     </div>
 
@@ -65,10 +88,8 @@ function buildEmailHtml(
       </p>
     </div>
 
-    <!-- Job list -->
-    <table style="width:100%; border-collapse:collapse; margin-top:16px;">
-      ${jobRows}
-    </table>
+    <!-- Sections -->
+    ${sectionBlocks}
 
     <!-- Footer -->
     <div style="padding:24px; background:#f8fafc; border-top:1px solid #e2e8f0;">
@@ -85,8 +106,7 @@ function buildEmailHtml(
 export async function sendDigestEmail(
   toEmail: string,
   firstName: string,
-  matches: JobMatch[],
-  keywords: string,
+  sections: MatchSection[],
   location: string
 ): Promise<void> {
   const transporter = nodemailer.createTransport({
@@ -100,12 +120,14 @@ export async function sendDigestEmail(
   })
 
   const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173'
-  const html = buildEmailHtml(firstName, matches, keywords, location, clientUrl)
+  const html = buildEmailHtml(firstName, sections, location, clientUrl)
+  const totalMatches = sections.reduce((s, sec) => s + sec.matches.length, 0)
+  const searchTitles = sections.map((s) => s.searchTitle).join(', ')
 
   await transporter.sendMail({
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to: toEmail,
-    subject: `${matches.length} New Job Matches — ${keywords} in ${location}`,
+    subject: `${totalMatches} New Job Matches — ${searchTitles}${location ? ` in ${location}` : ''}`,
     html,
   })
 }

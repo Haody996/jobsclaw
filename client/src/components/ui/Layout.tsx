@@ -5,7 +5,7 @@ import { clearAuth, isAuthenticated, isAdmin } from '../../lib/auth'
 
 const navItems = [
   { to: '/matches', label: 'AI Matches', icon: Sparkles, exact: false },
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, exact: false },
   { to: '/applications', label: 'Applications', icon: FileText, exact: false },
   { to: '/profile', label: 'Profile', icon: User, exact: false },
 ]
@@ -30,7 +30,7 @@ export default function Layout() {
 
   function handleLogout() {
     clearAuth()
-    navigate('/')
+    navigate('/matches')
   }
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -46,7 +46,7 @@ export default function Layout() {
       {/* ── Desktop sidebar ── */}
       <aside className="hidden md:flex w-64 bg-white border-r border-slate-200 shadow-[1px_0_20px_rgba(0,0,0,0.05)] flex-col flex-shrink-0">
         <div className="p-6 border-b border-slate-200">
-          <button onClick={() => navigate('/')} className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer">
+          <button onClick={() => navigate('/matches')} className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer">
             <JobsClawIcon className="w-7 h-7" />
             <span className="font-bold text-xl text-slate-900">JobsClaw</span>
           </button>
@@ -93,7 +93,7 @@ export default function Layout() {
           <div className="absolute inset-0 bg-black/40" />
           <aside className="absolute left-0 top-0 bottom-0 w-64 bg-white flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="p-5 border-b border-slate-200 flex items-center justify-between">
-              <button onClick={() => { navigate('/'); setMobileOpen(false) }} className="flex items-center gap-2">
+              <button onClick={() => { navigate('/matches'); setMobileOpen(false) }} className="flex items-center gap-2">
                 <JobsClawIcon className="w-7 h-7" />
                 <span className="font-bold text-xl text-slate-900">JobsClaw</span>
               </button>
@@ -146,7 +146,7 @@ export default function Layout() {
           <button onClick={() => setMobileOpen(true)} className="text-slate-600 hover:text-slate-900">
             <Menu className="w-5 h-5" />
           </button>
-          <button onClick={() => navigate('/')} className="flex items-center gap-2">
+          <button onClick={() => navigate('/matches')} className="flex items-center gap-2">
             <JobsClawIcon className="w-6 h-6" />
             <span className="font-bold text-lg text-slate-900">JobsClaw</span>
           </button>

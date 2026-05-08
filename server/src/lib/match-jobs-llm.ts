@@ -10,6 +10,11 @@ export interface JobMatch {
   compatibility_score: number
 }
 
+export interface MatchSection {
+  searchTitle: string
+  matches: JobMatch[]
+}
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
 const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash-001']

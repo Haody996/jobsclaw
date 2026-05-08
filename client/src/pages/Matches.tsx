@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ExternalLink, Sparkles, MapPin, Building2, CalendarDays, Inbox, Send, CheckCircle, Settings2, ChevronDown, ChevronUp, FileText, Upload, Plus, X, Mail } from 'lucide-react'
+import { ExternalLink, Sparkles, MapPin, Building2, CalendarDays, Inbox, Send, CheckCircle, Settings2, ChevronDown, ChevronUp, FileText, Upload, Plus, X, Mail, AlertCircle } from 'lucide-react'
 import api from '../lib/api'
 import { isAuthenticated } from '../lib/auth'
 import Spinner from '../components/ui/Spinner'
@@ -65,6 +65,8 @@ export default function Matches() {
   const [resumeSuccess, setResumeSuccess] = useState(false)
   const [extraSlots, setExtraSlots] = useState(0)
   const [guestEmail, setGuestEmail] = useState('')
+  const [guestResumeText, setGuestResumeText] = useState(() => readGuestPrefs()?.resumeText || '')
+  const [guestResumeName, setGuestResumeName] = useState(() => readGuestPrefs()?.resumeName || '')
   const [guestDigestJobId, setGuestDigestJobId] = useState<string | null>(null)
   const [showCongratsBanner, setShowCongratsBanner] = useState(false)
 
@@ -150,6 +152,22 @@ export default function Matches() {
     },
   })
 
+  const uploadGuestResume = useMutation({
+    mutationFn: (file: File) => {
+      const fd = new FormData()
+      fd.append('resume', file)
+      return api.post('/profile/resume/guest', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+    },
+    onSuccess: ({ data }, file) => {
+      const text = data.resumeText || ''
+      const name = file.name
+      setGuestResumeText(text)
+      setGuestResumeName(name)
+      const current = readGuestPrefs() || {}
+      localStorage.setItem('jobsclaw_guest', JSON.stringify({ ...current, resumeText: text, resumeName: name }))
+    },
+  })
+
   const savePreferences = useMutation({
     mutationFn: () => api.put('/preferences', prefForm),
     onSuccess: () => {
@@ -167,6 +185,7 @@ export default function Matches() {
   const triggerGuestDigest = useMutation({
     mutationFn: () => api.post('/preferences/trigger/guest', {
       email: guestEmail,
+      resumeText: guestResumeText,
       keywords: prefForm.keywords, keywords2: prefForm.keywords2, keywords3: prefForm.keywords3,
       location: prefForm.location, scrapeLimit: prefForm.scrapeLimit, matchLimit: prefForm.matchLimit,
     }),
@@ -382,6 +401,45 @@ export default function Matches() {
                   />
                 </div>
                 <p className="text-xs text-slate-400 mt-1">We'll send your AI-matched jobs here — no account needed</p>
+              </div>
+            )}
+
+            {/* Guest resume upload */}
+            {!authed && (
+              <div className="mb-4">
+                <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                  Resume (PDF) <span className="text-slate-400 font-normal">— optional but improves match quality</span>
+                </label>
+                {uploadGuestResume.isPending ? (
+                  <div className="flex items-center gap-2 text-sm text-slate-500"><Spinner size="sm" /> Uploading…</div>
+                ) : guestResumeName ? (
+                  <div className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="w-4 h-4 text-indigo-500 flex-shrink-0" />
+                      <span className="text-sm font-medium text-slate-700 truncate">{guestResumeName}</span>
+                      {guestResumeText ? (
+                        <span className="text-xs text-green-600 bg-green-50 border border-green-200 rounded-full px-2 py-0.5 flex-shrink-0">extracted ✓</span>
+                      ) : (
+                        <span className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 flex-shrink-0 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" /> no text found
+                        </span>
+                      )}
+                    </div>
+                    <label className="cursor-pointer flex-shrink-0 px-3 py-1 text-xs font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors">
+                      Replace
+                      <input type="file" accept=".pdf" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadGuestResume.mutate(f) }} className="hidden" />
+                    </label>
+                  </div>
+                ) : (
+                  <label className="flex items-center gap-2 cursor-pointer px-3 py-2 border border-dashed border-slate-300 rounded-lg hover:border-indigo-400 hover:bg-indigo-50 transition-colors w-fit">
+                    <Upload className="w-4 h-4 text-slate-400" />
+                    <span className="text-sm text-slate-500">Upload resume PDF</span>
+                    <input type="file" accept=".pdf" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadGuestResume.mutate(f) }} className="hidden" />
+                  </label>
+                )}
+                {uploadGuestResume.isError && (
+                  <p className="text-xs text-red-600 mt-1">{(uploadGuestResume.error as any)?.response?.data?.error || 'Upload failed'}</p>
+                )}
               </div>
             )}
 
@@ -604,7 +662,7 @@ export default function Matches() {
           </div>
           <h2 className="text-lg font-semibold text-slate-700 mb-2">Your matches will appear here</h2>
           <p className="text-sm text-slate-500 max-w-sm mx-auto mb-5">
-            Fill in your email and job title above, then click <strong>Send My Job Matches</strong>.
+            Fill in your email and job title above, then click <strong>Send My Job Matches</strong>. Upload your resume for more accurate AI matching.
           </p>
           <button onClick={openSignup} className="text-sm text-indigo-600 hover:text-indigo-800 font-medium group inline-flex items-center gap-1">
             Already have an account? Sign in
