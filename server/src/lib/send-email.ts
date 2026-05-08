@@ -103,6 +103,55 @@ function buildEmailHtml(
 </html>`
 }
 
+export async function sendHelpRequestEmail(
+  fromEmail: string,
+  message: string,
+  userId?: string
+): Promise<void> {
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  })
+
+  const adminEmail = process.env.ADMIN_EMAIL || process.env.SMTP_USER || 'jim.nevergiveup@gmail.com'
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:560px;margin:40px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+    <div style="background:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);padding:28px 24px;">
+      <h1 style="margin:0;font-size:20px;color:#fff;font-weight:700;">New Help Request</h1>
+      <p style="margin:6px 0 0;font-size:13px;color:#c7d2fe;">Via JobsClaw Help Widget</p>
+    </div>
+    <div style="padding:24px;">
+      <p style="margin:0 0 6px;font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">From</p>
+      <p style="margin:0 0 20px;font-size:15px;color:#1e293b;">${fromEmail}${userId ? ` <span style="color:#94a3b8;font-size:13px;">(user ${userId})</span>` : ' <span style="color:#94a3b8;font-size:13px;">(guest)</span>'}</p>
+      <p style="margin:0 0 6px;font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;">Message</p>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;">
+        <p style="margin:0;font-size:15px;color:#334155;line-height:1.6;white-space:pre-wrap;">${message.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+      </div>
+    </div>
+    <div style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;">
+      <p style="margin:0;font-size:12px;color:#94a3b8;text-align:center;">JobsClaw Help Request System</p>
+    </div>
+  </div>
+</body>
+</html>`
+
+  await transporter.sendMail({
+    from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    to: adminEmail,
+    replyTo: fromEmail,
+    subject: `[JobsClaw Help] ${message.slice(0, 60)}${message.length > 60 ? '…' : ''}`,
+    html,
+  })
+}
+
 export async function sendDigestEmail(
   toEmail: string,
   firstName: string,

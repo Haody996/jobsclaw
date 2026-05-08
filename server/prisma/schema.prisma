@@ -18,6 +18,7 @@ model User {
   applications Application[]
   preference   JobPreference?
   matchHistory JobMatchHistory[]
+  helpRequests HelpRequest[]
 }
 
 model Profile {
@@ -102,6 +103,16 @@ model JobMatchHistory {
   runDate    DateTime @default(now())
   jobLinks   String[]
   topMatches Json
+}
+
+model HelpRequest {
+  id        String   @id @default(cuid())
+  email     String
+  message   String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  status    String   @default("open")
+  createdAt DateTime @default(now())
 }
 
 enum ApplicationStatus {

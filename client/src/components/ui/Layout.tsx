@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { LayoutDashboard, FileText, User, LogOut, LogIn, Sparkles, Menu, X, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react'
 import { clearAuth, isAuthenticated, isAdmin } from '../../lib/auth'
+import HelpButton from './HelpButton'
 
 const navItems = [
   { to: '/matches', label: 'AI Matches', icon: Sparkles, exact: false },
@@ -196,6 +197,7 @@ export default function Layout() {
 
         <main className="flex-1 overflow-auto pb-20 md:pb-0">
           <Outlet />
+          <HelpButton />
         </main>
 
         {/* Mobile bottom tab bar */}

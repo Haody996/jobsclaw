@@ -11,6 +11,7 @@ import profileRoutes from './routes/profile'
 import preferencesRoutes from './routes/preferences'
 import matchesRoutes from './routes/matches'
 import adminRoutes from './routes/admin'
+import helpRoutes from './routes/help'
 import { initScheduler } from './scheduler'
 
 const app = express()
@@ -32,6 +33,7 @@ app.use('/api/profile', profileRoutes)
 app.use('/api/preferences', preferencesRoutes)
 app.use('/api/matches', matchesRoutes)
 app.use('/api/admin', adminRoutes)
+app.use('/api/help', helpRoutes)
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }))
 
