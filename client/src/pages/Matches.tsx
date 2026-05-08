@@ -14,6 +14,7 @@ interface JobMatch {
   location: string
   match_rationale: string
   compatibility_score?: number
+  isEasyApply?: boolean
 }
 
 interface MatchSection {
@@ -30,15 +31,23 @@ interface MatchRun {
 
 function QuickApplyButton({ job }: { job: JobMatch }) {
   return (
-    <a
-      href={job.link}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex-shrink-0 inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 !text-white text-sm font-medium rounded-lg hover:from-indigo-700 hover:to-violet-700 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-150"
-    >
-      <ExternalLink className="w-3.5 h-3.5" />
-      Apply
-    </a>
+    <div className="flex-shrink-0 flex flex-col items-end gap-1.5">
+      {job.isEasyApply && (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-sky-100 text-sky-700 border border-sky-200">
+          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          Easy Apply
+        </span>
+      )}
+      <a
+        href={job.link}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 !text-white text-sm font-medium rounded-lg hover:from-indigo-700 hover:to-violet-700 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-150"
+      >
+        <ExternalLink className="w-3.5 h-3.5" />
+        {job.isEasyApply ? 'Apply on LinkedIn' : 'Apply'}
+      </a>
+    </div>
   )
 }
 

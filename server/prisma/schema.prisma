@@ -62,6 +62,7 @@ model Job {
   salary       String?
   jobType      String?
   isRemote     Boolean       @default(false)
+  isEasyApply  Boolean       @default(false)
   postedAt     DateTime?
   fetchedAt    DateTime      @default(now())
   applications Application[]

@@ -6,6 +6,7 @@ export interface ScrapedJob {
   company: string
   link: string
   location: string
+  isEasyApply?: boolean
 }
 
 export async function scrapeLinkedInJobs(
@@ -43,11 +44,18 @@ export async function scrapeLinkedInJobs(
     const loc = $(card).find('.job-search-card__location').text().trim()
 
     if (title && company && rawLink) {
+      // LinkedIn Easy Apply jobs have a specific icon class or "Easy Apply" label in the card HTML
+      const cardHtml = $(card).html() || ''
+      const isEasyApply =
+        /easy.?apply/i.test($(card).text()) ||
+        cardHtml.includes('easy-apply') ||
+        cardHtml.includes('linkedin-bugs-easy-apply-icon')
       jobs.push({
         title,
         company,
         link: rawLink.split('?')[0],
         location: loc,
+        isEasyApply,
       })
     }
   })

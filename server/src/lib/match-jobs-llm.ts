@@ -8,6 +8,7 @@ export interface JobMatch {
   location: string
   match_rationale: string
   compatibility_score: number
+  isEasyApply?: boolean
 }
 
 export interface MatchSection {
@@ -80,7 +81,12 @@ export async function matchJobsToResume(
         throw new Error('no matches returned')
       }
       console.log(`[match-jobs-llm] ${modelName} succeeded`)
-      return parsed.top_matches
+      // Attach isEasyApply from source jobs (LLM doesn't return this field)
+      const byLink = new Map(jobs.map((j) => [j.link, j]))
+      return parsed.top_matches.map((m) => ({
+        ...m,
+        isEasyApply: byLink.get(m.link)?.isEasyApply ?? false,
+      }))
     } catch (err: any) {
       lastError = err
       console.warn(`[match-jobs-llm] ${modelName} failed: ${err?.message}`)
