@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, Sparkles, MapPin, Building2, CalendarDays, Inbox, Send, CheckCircle, Settings2, ChevronDown, ChevronUp, FileText, Upload, Plus, X, Mail, AlertCircle } from 'lucide-react'
 import api from '../lib/api'
-import { isAuthenticated } from '../lib/auth'
+import { isAuthenticated, isAdmin, getToken } from '../lib/auth'
 import Spinner from '../components/ui/Spinner'
 import AutocompleteInput from '../components/ui/AutocompleteInput'
 
@@ -29,7 +29,46 @@ interface MatchRun {
   topMatches: JobMatch[] | MatchSection[]
 }
 
-function QuickApplyButton({ job }: { job: JobMatch }) {
+type AutoApplyState = 'idle' | 'loading' | 'queued' | 'error'
+
+function QuickApplyButton({ job, adminMode }: { job: JobMatch; adminMode: boolean }) {
+  const [autoState, setAutoState] = useState<AutoApplyState>('idle')
+  const [errorMsg, setErrorMsg] = useState('')
+
+  async function handleAutoApply() {
+    setAutoState('loading')
+    setErrorMsg('')
+    try {
+      const token = getToken()
+      const res = await fetch('/api/apply/quick', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          title: job.title,
+          company: job.company,
+          link: job.link,
+          location: job.location,
+        }),
+      })
+      if (res.status === 409) {
+        // Already applied
+        setAutoState('queued')
+        return
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to queue')
+      }
+      setAutoState('queued')
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Error')
+      setAutoState('error')
+    }
+  }
+
   return (
     <div className="flex-shrink-0 flex flex-col items-end gap-1.5">
       {job.isEasyApply && (
@@ -38,15 +77,51 @@ function QuickApplyButton({ job }: { job: JobMatch }) {
           Easy Apply
         </span>
       )}
-      <a
-        href={job.link}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 !text-white text-sm font-medium rounded-lg hover:from-indigo-700 hover:to-violet-700 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-150"
-      >
-        <ExternalLink className="w-3.5 h-3.5" />
-        {job.isEasyApply ? 'Apply on LinkedIn' : 'Apply'}
-      </a>
+
+      {adminMode && !job.isEasyApply ? (
+        <div className="flex flex-col items-end gap-1">
+          {autoState === 'queued' ? (
+            <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <CheckCircle className="w-3.5 h-3.5" />
+              Queued
+            </span>
+          ) : (
+            <button
+              onClick={handleAutoApply}
+              disabled={autoState === 'loading'}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-medium rounded-lg hover:from-violet-700 hover:to-purple-700 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {autoState === 'loading' ? (
+                <>
+                  <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                  Queuing…
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/><path d="M21 3l-6 6"/><path d="M21 9V3h-6"/></svg>
+                  Auto Apply
+                </>
+              )}
+            </button>
+          )}
+          {autoState === 'error' && (
+            <span className="text-xs text-red-500 max-w-[140px] text-right">{errorMsg}</span>
+          )}
+        </div>
+      ) : (
+        <a
+          href={job.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 !text-white text-sm font-medium rounded-lg hover:from-indigo-700 hover:to-violet-700 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-150"
+        >
+          <ExternalLink className="w-3.5 h-3.5" />
+          {job.isEasyApply ? 'Apply on LinkedIn' : 'Apply'}
+        </a>
+      )}
     </div>
   )
 }
@@ -67,6 +142,7 @@ export default function Matches() {
   const navigate = useNavigate()
   const location = useLocation()
   const authed = isAuthenticated()
+  const admin = isAdmin()
 
   const [showSetup, setShowSetup] = useState(true)
   const [prefSaved, setPrefSaved] = useState(false)
@@ -772,7 +848,7 @@ export default function Matches() {
                                     <p className="text-sm text-slate-600 leading-relaxed">{job.match_rationale}</p>
                                   </div>
                                 </div>
-                                <QuickApplyButton job={job} />
+                                <QuickApplyButton job={job} adminMode={admin} />
                               </div>
                             </div>
                           ))}
