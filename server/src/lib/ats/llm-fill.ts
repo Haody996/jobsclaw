@@ -146,6 +146,7 @@ export async function fillCustomQuestionsWithLLM(
   answers: { question: string; answer: string }[]
 ): Promise<void> {
   const fields = await extractUnfilledFields(page)
+  console.log(`[llm-fill] extracted ${fields.length} unfilled field(s):`, fields.map((f) => `"${f.label}"(${f.type})`).join(', ') || '(none)')
   if (fields.length === 0) return
 
   // Skip obviously standard fields that adapters already handle
@@ -153,6 +154,7 @@ export async function fillCustomQuestionsWithLLM(
     const l = f.label.toLowerCase()
     return !/(^first.?name|^last.?name|^full.?name|^email|^phone|^resume|^cv|^linkedin|^portfolio|^website|^github|^city|^state|^zip|^postal|^address|^country)/.test(l)
   })
+  console.log(`[llm-fill] ${customFields.length} custom field(s) to fill via LLM:`, customFields.map((f) => `"${f.label}"`).join(', ') || '(none)')
   if (customFields.length === 0) return
 
   const model = genAI.getGenerativeModel({
@@ -192,10 +194,16 @@ ${JSON.stringify(customFields, null, 2)}`
   try {
     const result = await model.generateContent(prompt)
     const actions = JSON.parse(result.response.text()) as FillAction[]
+    console.log(`[llm-fill] LLM returned ${actions.length} fill action(s):`,
+      actions.map((a) => `"${a.id}"="${a.value?.slice(0, 40) ?? ''}"`)
+    )
     for (const action of actions) {
       if (!action.value) continue
       const field = customFields.find((f) => f.id === action.id)
-      if (field) await applyFill(page, field, action.value)
+      if (field) {
+        console.log(`[llm-fill] filling "${field.label}" → "${action.value.slice(0, 60)}"`)
+        await applyFill(page, field, action.value)
+      }
     }
   } catch (err) {
     console.warn('[llm-fill] Custom question fill failed:', err)

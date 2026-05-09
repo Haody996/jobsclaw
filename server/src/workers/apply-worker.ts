@@ -39,7 +39,7 @@ interface ApplyJobData {
 // ─── LinkedIn Easy Apply ──────────────────────────────────────────────────
 
 async function loginLinkedIn(page: any, liEmail: string, liPassword: string): Promise<void> {
-  console.log('LinkedIn: logging in…')
+  dbg('linkedin', `logging in as ${liEmail}`)
   await page.goto('https://www.linkedin.com/login', { waitUntil: 'domcontentloaded', timeout: 30000 })
   await page.waitForTimeout(1500)
   await page.fill('#username', liEmail)
@@ -174,25 +174,57 @@ async function runLinkedInApply(
   if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true })
 
   const stateExists = fs.existsSync(LINKEDIN_STATE_PATH)
+  dbg('linkedin', `session file ${stateExists ? 'found' : 'not found'}: ${LINKEDIN_STATE_PATH}`)
+
   const browser = await chromium.launch({ headless: true })
   const context = await browser.newContext(stateExists ? { storageState: LINKEDIN_STATE_PATH } : {})
   const page = await context.newPage()
 
   try {
-    await page.goto('https://www.linkedin.com/feed/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+    // Navigate to feed to check login state; a redirect loop means the saved
+    // session is stale — clear it and re-authenticate on the next run.
+    dbg('linkedin', 'checking session via /feed…')
+    try {
+      await page.goto('https://www.linkedin.com/feed/', { waitUntil: 'domcontentloaded', timeout: 30000 })
+    } catch (navErr: any) {
+      if (/ERR_TOO_MANY_REDIRECTS/i.test(navErr.message)) {
+        if (fs.existsSync(LINKEDIN_STATE_PATH)) fs.unlinkSync(LINKEDIN_STATE_PATH)
+        throw new Error('LinkedIn session expired and caused a redirect loop. The stale session has been cleared — please retry to re-authenticate.')
+      }
+      throw navErr
+    }
     await page.waitForTimeout(2000)
-    const isLoggedIn = !page.url().includes('/login') && !page.url().includes('/authwall')
+    const feedUrl = page.url()
+    const isLoggedIn = !feedUrl.includes('/login') && !feedUrl.includes('/authwall')
+    dbg('linkedin', `session check — landed on: ${feedUrl} → loggedIn=${isLoggedIn}`)
 
     if (!isLoggedIn) {
       if (!profile.linkedinEmail || !profile.linkedinPassword) {
         throw new Error('LinkedIn credentials not saved — add your LinkedIn email and password in Profile settings.')
       }
+      dbg('linkedin', 'not logged in, attempting login…')
       await loginLinkedIn(page, profile.linkedinEmail, profile.linkedinPassword)
       await context.storageState({ path: LINKEDIN_STATE_PATH })
+      dbg('linkedin', 'login successful, session saved')
+    } else {
+      dbg('linkedin', 'using existing session')
     }
 
-    await page.goto(job.url, { waitUntil: 'domcontentloaded', timeout: 30000 })
+    dbg('linkedin', `navigating to job URL: ${job.url}`)
+    try {
+      await page.goto(job.url, { waitUntil: 'domcontentloaded', timeout: 30000 })
+    } catch (navErr: any) {
+      if (/ERR_TOO_MANY_REDIRECTS/i.test(navErr.message)) {
+        // LinkedIn is bouncing this specific URL — likely an authwall loop.
+        // Clear state so the next attempt retries login from scratch.
+        if (fs.existsSync(LINKEDIN_STATE_PATH)) fs.unlinkSync(LINKEDIN_STATE_PATH)
+        throw new Error('LinkedIn redirect loop on job page — session cleared, please retry to re-authenticate.')
+      }
+      throw navErr
+    }
     await page.waitForTimeout(3000)
+    dbg('linkedin', `landed on: ${page.url()} title="${await page.title()}"`)
+    dbg('linkedin', 'scanning for Easy Apply / Apply buttons…')
 
     const easyApplyBtns = [
       '[aria-label*="Easy Apply"]',
@@ -204,14 +236,25 @@ async function runLinkedInApply(
     for (const sel of easyApplyBtns) {
       const btn = page.locator(sel).first()
       if (await btn.isVisible({ timeout: 2000 }).catch(() => false)) {
+        dbg('linkedin', `found Easy Apply button via selector: "${sel}"`)
         await btn.click({ timeout: 5000 })
         clicked = true
         break
       }
     }
     if (!clicked) {
+      // Log all visible apply-related buttons for debugging
+      try {
+        const allBtns = await page.locator('button, a[role="button"]').all()
+        for (const b of allBtns) {
+          const text: string = (await b.innerText().catch(() => '')).trim()
+          if (/apply/i.test(text)) dbg('linkedin', `visible button: "${text}"`)
+        }
+      } catch { /* ok */ }
+
       const applyBtn = page.locator('button.jobs-apply-button, a.jobs-apply-button').first()
       const btnText: string = await applyBtn.innerText().catch(() => '')
+      dbg('linkedin', `no Easy Apply found; jobs-apply-button text="${btnText}"`)
       if (/apply on/i.test(btnText)) {
         throw new Error('This LinkedIn job redirects to the company site — no Easy Apply modal.')
       }
@@ -220,8 +263,9 @@ async function runLinkedInApply(
 
     await page.waitForTimeout(2000)
     for (let step = 0; step < 15; step++) {
+      dbg('linkedin', `Easy Apply modal — step ${step + 1}`)
       const done = await handleEasyApplyStep(page, profile, answers, email)
-      if (done) { console.log(`LinkedIn Easy Apply: submitted after ${step + 1} step(s)`); break }
+      if (done) { dbg('linkedin', `submitted after ${step + 1} step(s)`); break }
       if (step === 14) throw new Error('LinkedIn Easy Apply exceeded maximum steps')
     }
 
@@ -340,10 +384,17 @@ async function tryClick(page: any, sel: string): Promise<boolean> {
   return false
 }
 
+// ─── Debug helpers ────────────────────────────────────────────────────────
+
+function dbg(tag: string, ...args: any[]) {
+  console.log(`[apply:${tag}]`, ...args)
+}
+
 // ─── Main orchestrator ────────────────────────────────────────────────────
 
 async function runApply(data: ApplyJobData): Promise<void> {
   const { applicationId, jobId, userId } = data
+  dbg('start', `applicationId=${applicationId} jobId=${jobId} userId=${userId}`)
 
   await prisma.application.update({ where: { id: applicationId }, data: { status: 'IN_PROGRESS' } })
 
@@ -354,7 +405,10 @@ async function runApply(data: ApplyJobData): Promise<void> {
     prisma.commonAnswer.findMany({ where: { userId } }),
   ])
 
+  dbg('data', `job=${job?.title ?? 'NOT FOUND'} profile=${profile ? 'ok' : 'MISSING'} user=${user?.email ?? 'MISSING'} answers=${answers.length}`)
+
   if (!job || !profile || !user) {
+    dbg('abort', 'missing job/profile/user — failing application')
     await prisma.application.update({
       where: { id: applicationId },
       data: { status: 'FAILED', errorMessage: 'Missing profile data' },
@@ -362,14 +416,26 @@ async function runApply(data: ApplyJobData): Promise<void> {
     return
   }
 
+  dbg('profile-check',
+    `firstName=${profile.firstName || '(empty)'}`,
+    `lastName=${profile.lastName || '(empty)'}`,
+    `phone=${profile.phone || '(none)'}`,
+    `resumePath=${profile.resumePath || '(none)'}`,
+    `resumeText=${profile.resumeText ? profile.resumeText.length + ' chars' : '(none)'}`,
+    `linkedinEmail=${profile.linkedinEmail || '(none)'}`,
+    `linkedinPassword=${profile.linkedinPassword ? '***' : '(none)'}`,
+  )
+
   const ats = detectATS(job.url)
-  console.log(`[apply-worker] ${job.title} @ ${job.company} → ATS: ${ats}`)
+  dbg('ats', `${job.title} @ ${job.company} → ${ats}`, `url=${job.url}`)
+  dbg('ats', `isEasyApply=${job.isEasyApply}`)
 
   try {
     if (ats === 'linkedin') {
       if (job.isEasyApply) {
         throw new Error('LinkedIn Easy Apply — click the link to apply directly on LinkedIn (takes ~2 minutes)')
       }
+      dbg('linkedin', 'starting LinkedIn apply flow')
       await runLinkedInApply(
         job,
         profile as ApplyContext['profile'] & { linkedinEmail?: string | null; linkedinPassword?: string | null },
@@ -377,12 +443,15 @@ async function runApply(data: ApplyJobData): Promise<void> {
         user.email
       )
     } else if (ats === 'indeed') {
+      dbg('indeed', 'starting Indeed apply flow')
       await runIndeedApply(job, profile as ApplyContext['profile'], answers, user.email)
     } else {
       const adapter = getAdapter(job.url)
+      dbg('adapter', `using adapter: ${adapter.name} for url: ${job.url}`)
       const browser = await chromium.launch({ headless: true })
       const page = await browser.newPage()
       try {
+        dbg('adapter', 'navigating and filling form…')
         await adapter.apply({
           page,
           job,
@@ -390,13 +459,14 @@ async function runApply(data: ApplyJobData): Promise<void> {
           email: user.email,
           answers,
         })
+        dbg('adapter', `${adapter.name} adapter completed`)
       } finally {
         await browser.close()
       }
     }
 
     await prisma.application.update({ where: { id: applicationId }, data: { status: 'SUBMITTED' } })
-    console.log(`✓ Applied: ${job.title} @ ${job.company} [${ats}] (${applicationId})`)
+    dbg('done', `✓ Applied: ${job.title} @ ${job.company} [${ats}] (${applicationId})`)
   } catch (err: any) {
     const msg = err.message || 'Unknown error'
     console.error(`✗ Apply failed for ${applicationId}: ${msg}`)
