@@ -111,7 +111,16 @@ export default function Applications() {
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm table-fixed min-w-[760px]">
+            <colgroup>
+              <col className="w-[30%]" />
+              <col className="w-[16%]" />
+              <col className="w-[16%]" />
+              <col className="w-[9%]" />
+              <col className="w-[13%]" />
+              <col className="w-[10%]" />
+              <col className="w-[6%]" />
+            </colgroup>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="text-left px-5 py-3 font-medium text-slate-600">Job</th>
@@ -145,15 +154,15 @@ export default function Applications() {
                       onClick={() => app.errorMessage && setExpandedId(expandedId === app.id ? null : app.id)}
                     >
                       <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-slate-900 line-clamp-1">{app.job.title}</span>
-                          <a href={app.job.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-slate-400 hover:text-indigo-600">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-medium text-slate-900 truncate">{app.job.title}</span>
+                          <a href={app.job.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="text-slate-400 hover:text-indigo-600 flex-shrink-0">
                             <ExternalLink className="w-3.5 h-3.5" />
                           </a>
                         </div>
                         {app.errorMessage && (
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <p className="text-xs text-red-500 line-clamp-1 flex-1">
+                          <div className="flex items-center gap-1 mt-0.5 min-w-0">
+                            <p className="text-xs text-red-500 truncate flex-1 min-w-0">
                               {app.errorMessage}
                             </p>
                             {expandedId === app.id
@@ -163,7 +172,7 @@ export default function Applications() {
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-slate-600">{app.job.company}</td>
+                      <td className="px-4 py-3.5 text-slate-600 truncate">{app.job.company}</td>
                       <td className="px-4 py-3.5">
                         <div className="flex items-center gap-2">
                           <StatusProgress status={app.status} />
