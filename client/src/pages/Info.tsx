@@ -19,10 +19,10 @@ function NavBar() {
           Log in
         </button>
         <button
-          onClick={() => navigate('/register', { state: { backgroundLocation: location } })}
+          onClick={() => navigate('/matches')}
           className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
         >
-          Get started
+          Try it free
         </button>
       </div>
     </nav>
@@ -92,10 +92,9 @@ const stats = [
 
 export default function Info() {
   const navigate = useNavigate()
-  const location = useLocation()
 
-  function openRegister() {
-    navigate('/register', { state: { backgroundLocation: location } })
+  function tryNow() {
+    navigate('/matches')
   }
 
   return (
@@ -124,10 +123,10 @@ export default function Info() {
 
         <div className="flex flex-col sm:flex-row items-center gap-3">
           <button
-            onClick={openRegister}
+            onClick={tryNow}
             className="flex items-center gap-2 px-6 py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors text-base"
           >
-            Get started free
+            Try it free — no signup
             <ArrowRight className="w-4 h-4" />
           </button>
           <button
@@ -202,8 +201,8 @@ export default function Info() {
               Every morning at your chosen time, you'll receive a clean email with your 5 best job matches —
               complete with company, location, and an AI-written explanation of why each job fits your background.
             </p>
-            <button onClick={openRegister} className="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors text-sm">
-              Start receiving your digest
+            <button onClick={tryNow} className="flex items-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg transition-colors text-sm">
+              Try it free
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -245,13 +244,13 @@ export default function Info() {
             <span className="text-blue-400">already out there.</span>
           </h2>
           <p className="text-white/50 text-lg mb-10">
-            Let AI find it for you. Set up in under 2 minutes.
+            Let AI find it for you — try it now, no signup required.
           </p>
           <button
-            onClick={openRegister}
+            onClick={tryNow}
             className="inline-flex items-center gap-2 px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition-colors text-lg"
           >
-            Get started free
+            Try it free
             <ArrowRight className="w-5 h-5" />
           </button>
         </div>
