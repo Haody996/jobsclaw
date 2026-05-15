@@ -1,5 +1,11 @@
 import axios from 'axios'
 
+export interface JSearchApplyOption {
+  publisher: string
+  apply_link: string
+  is_direct: boolean
+}
+
 export interface JSearchJob {
   job_id: string
   job_title: string
@@ -9,6 +15,9 @@ export interface JSearchJob {
   job_country: string
   job_description: string
   job_apply_link: string
+  job_apply_is_direct?: boolean
+  job_publisher?: string
+  apply_options?: JSearchApplyOption[]
   job_source: string
   job_employment_type: string
   job_salary_min?: number

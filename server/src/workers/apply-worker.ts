@@ -59,6 +59,21 @@ function normalize(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 }
 
+// Sites we cannot get past without a real session (Cloudflare/captcha/login).
+// We exclude them as candidate apply URLs unless nothing else is available.
+const BOT_PROTECTED_HOSTS = ['ziprecruiter.com', 'glassdoor.com', 'monster.com', 'simplyhired.com']
+
+// Known ATS hosts our adapters can actually fill. Higher priority.
+const DIRECT_ATS_HOSTS = ['greenhouse.io', 'boards.greenhouse', 'lever.co', 'ashbyhq.com', 'myworkdayjobs.com', 'icims.com']
+
+function urlScore(link: string): number {
+  if (!link) return -100
+  if (link.includes('linkedin.com')) return -100
+  if (DIRECT_ATS_HOSTS.some((h) => link.includes(h))) return 100
+  if (BOT_PROTECTED_HOSTS.some((h) => link.includes(h))) return -50
+  return 10 // unknown host, prefer over bot-protected but below ATS
+}
+
 async function resolveDirectApplyUrl(
   title: string,
   company: string,
@@ -67,10 +82,15 @@ async function resolveDirectApplyUrl(
   const queries = [
     `${title} at ${company}${location ? ' ' + location : ''}`,
     `${title} ${company}`,
+    `"${company}" "${title}"`,
   ]
 
   const wantTitle = normalize(title)
   const wantCompany = normalize(company)
+
+  type Candidate = { link: string; publisher: string; isDirect: boolean; matchScore: number }
+  const seen = new Set<string>()
+  const candidates: Candidate[] = []
 
   for (const q of queries) {
     let results: Awaited<ReturnType<typeof searchJobs>> = []
@@ -82,31 +102,43 @@ async function resolveDirectApplyUrl(
     }
     dbg('jsearch', `query="${q}" → ${results.length} results`)
 
-    const scored = results
-      .map((j) => {
-        const t = normalize(j.job_title)
-        const c = normalize(j.employer_name)
-        const titleMatch = t === wantTitle ? 2 : (t.includes(wantTitle) || wantTitle.includes(t) ? 1 : 0)
-        const companyMatch = c === wantCompany ? 2 : (c.includes(wantCompany) || wantCompany.includes(c) ? 1 : 0)
-        return { job: j, score: titleMatch + companyMatch, titleMatch, companyMatch }
-      })
-      .filter((r) => r.companyMatch > 0 && r.titleMatch > 0)
-      .sort((a, b) => b.score - a.score)
+    for (const j of results) {
+      const t = normalize(j.job_title)
+      const c = normalize(j.employer_name)
+      const titleMatch = t === wantTitle ? 2 : (t.includes(wantTitle) || wantTitle.includes(t) ? 1 : 0)
+      const companyMatch = c === wantCompany ? 2 : (c.includes(wantCompany) || wantCompany.includes(c) ? 1 : 0)
+      if (companyMatch === 0 || titleMatch === 0) continue
+      const matchScore = titleMatch + companyMatch
 
-    for (const r of scored) {
-      const link = r.job.job_apply_link
-      if (!link) continue
-      if (link.includes('linkedin.com')) continue
-      dbg('jsearch', `picked: "${r.job.job_title}" @ "${r.job.employer_name}" → ${link}`)
-      return link
-    }
-
-    if (scored.length > 0) {
-      dbg('jsearch', `no non-LinkedIn URL among ${scored.length} matched result(s)`)
+      const opts: { link: string; publisher: string; isDirect: boolean }[] = []
+      if (j.apply_options && j.apply_options.length) {
+        for (const o of j.apply_options) opts.push({ link: o.apply_link, publisher: o.publisher, isDirect: !!o.is_direct })
+      } else if (j.job_apply_link) {
+        opts.push({ link: j.job_apply_link, publisher: j.job_publisher || '?', isDirect: !!j.job_apply_is_direct })
+      }
+      for (const o of opts) {
+        if (!o.link || seen.has(o.link)) continue
+        seen.add(o.link)
+        candidates.push({ ...o, matchScore })
+      }
     }
   }
 
-  return null
+  if (candidates.length === 0) return null
+
+  const ranked = candidates
+    .map((c) => ({ ...c, total: urlScore(c.link) + (c.isDirect ? 50 : 0) + c.matchScore * 5 }))
+    .sort((a, b) => b.total - a.total)
+
+  dbg('jsearch', `${ranked.length} candidate(s) — top 3:`,
+    ranked.slice(0, 3).map((c) => `[${c.total}] ${c.publisher}${c.isDirect ? '*' : ''} ${c.link.slice(0, 80)}`).join(' | '))
+
+  const best = ranked[0]
+  if (best.total < 0) {
+    dbg('jsearch', `best candidate is bot-protected or LinkedIn (score=${best.total}) — bailing`)
+    return null
+  }
+  return best.link
 }
 
 // ─── Indeed (may redirect to company ATS) ────────────────────────────────
@@ -313,6 +345,16 @@ async function runApply(data: ApplyJobData): Promise<void> {
       const context = await browser.newContext()
       const page = await context.newPage()
       try {
+        // Pre-flight: navigate and check for a bot-protection challenge so we
+        // fail with a clear message instead of "could not find submit button".
+        await page.goto(workingUrl, { waitUntil: 'domcontentloaded', timeout: 30000 })
+        await page.waitForTimeout(2000)
+        const t = (await page.title().catch(() => '')) || ''
+        const txt = (await page.locator('body').innerText({ timeout: 3000 }).catch(() => '')).slice(0, 2000)
+        if (/just a moment|verify you are human|attention required|access denied|are you human/i.test(t + ' ' + txt)) {
+          throw new Error(`Apply page blocked by bot protection (Cloudflare/captcha): "${t.trim()}" at ${workingUrl}`)
+        }
+
         await adapter.apply({
           page,
           job: { ...job, url: workingUrl },
