@@ -33,12 +33,11 @@ button, [role="button"], a {
   animation: ripple-out 1.4s ease-out 0.7s infinite;
 }
 
-/* Indeterminate progress bar — used while an auto-apply job is in flight */
-@keyframes indeterminate-slide {
-  0%   { transform: translateX(-100%); }
-  100% { transform: translateX(250%); }
+/* Shimmer sweep — overlaid on a status badge while an auto-apply job is in flight */
+@keyframes status-shimmer {
+  0%   { transform: translateX(-150%) skewX(-20deg); }
+  100% { transform: translateX(150%) skewX(-20deg); }
 }
-.animate-indeterminate {
-  animation: indeterminate-slide 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  width: 40%;
+.animate-status-shimmer {
+  animation: status-shimmer 1.3s ease-in-out infinite;
 }

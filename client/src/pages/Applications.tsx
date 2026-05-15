@@ -22,30 +22,16 @@ const MANUAL_STATUSES = ['INTERVIEWING', 'REJECTED', 'OFFER']
 function StatusProgress({ status }: { status: string }) {
   const cfg = STATUS_CONFIG[status] || { label: status, variant: 'default' }
   const isActive = status === 'PENDING' || status === 'IN_PROGRESS'
-  const isDone = status === 'SUBMITTED' || status === 'OFFER'
-  const isFail = status === 'FAILED' || status === 'REJECTED'
 
+  // Single-line badge keeps every row the same height. While the apply job
+  // is in flight, a shimmer sweeps across the badge as a slim progress cue.
   return (
-    <div className="flex flex-col gap-1.5 min-w-[100px]">
-      <Badge variant={cfg.variant}>{cfg.label}</Badge>
-      <div className="h-1 rounded-full bg-slate-100 overflow-hidden relative">
-        {isActive ? (
-          <div
-            className={`absolute inset-y-0 rounded-full animate-indeterminate ${
-              status === 'PENDING'
-                ? 'bg-gradient-to-r from-transparent via-slate-400 to-transparent'
-                : 'bg-gradient-to-r from-transparent via-indigo-500 to-transparent'
-            }`}
-          />
-        ) : (
-          <div
-            className={`h-full ${
-              isDone ? 'bg-emerald-500 w-full' : isFail ? 'bg-red-500 w-full' : 'bg-slate-300 w-full'
-            }`}
-          />
-        )}
-      </div>
-    </div>
+    <Badge variant={cfg.variant} className={isActive ? 'relative overflow-hidden' : undefined}>
+      {isActive && (
+        <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/70 to-transparent animate-status-shimmer pointer-events-none" />
+      )}
+      <span className="relative">{cfg.label}</span>
+    </Badge>
   )
 }
 
