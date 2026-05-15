@@ -340,8 +340,6 @@ async function runApply(data: ApplyJobData): Promise<void> {
     if (effectiveAts === 'indeed') {
       await runIndeedApply({ ...job, url: workingUrl }, profile as ApplyContext['profile'], answers, user.email, browser)
     } else {
-      const adapter = getAdapter(workingUrl)
-      dbg('adapter', `using ${adapter.name} for ${workingUrl}`)
       const context = await browser.newContext()
       const page = await context.newPage()
       try {
@@ -355,6 +353,29 @@ async function runApply(data: ApplyJobData): Promise<void> {
           throw new Error(`Apply page blocked by bot protection (Cloudflare/captcha): "${t.trim()}" at ${workingUrl}`)
         }
 
+        // Aggregator unwrap: Built In and similar list-and-link sites embed
+        // the real ATS URL in an Apply-Now anchor. Follow it before handing
+        // off to the adapter.
+        if (/builtin\.com|wellfound\.com|otta\.com|welcometothejungle\.com/.test(workingUrl)) {
+          const href = await page
+            .locator('a[aria-label*="Apply" i][href^="http"]')
+            .first()
+            .getAttribute('href')
+            .catch(() => null)
+          if (href && !href.includes('builtin.com') && !/\/auth\/|\/login/.test(href)) {
+            dbg('aggregator', `unwrapped ${workingUrl} → ${href}`)
+            workingUrl = href
+            effectiveAts = detectATS(workingUrl)
+            await page.goto(workingUrl, { waitUntil: 'domcontentloaded', timeout: 30000 })
+            await page.waitForTimeout(2000)
+          } else {
+            dbg('aggregator', `no external apply link found on aggregator page (got href=${href ?? 'null'})`)
+          }
+        }
+
+        const adapter = getAdapter(workingUrl)
+        dbg('adapter', `using ${adapter.name} for ${workingUrl}`)
+
         await adapter.apply({
           page,
           job: { ...job, url: workingUrl },
@@ -363,7 +384,7 @@ async function runApply(data: ApplyJobData): Promise<void> {
           answers,
         })
       } catch (err) {
-        await captureFailure(page, applicationId, `adapter:${adapter.name}`).catch(() => null)
+        await captureFailure(page, applicationId, `adapter`).catch(() => null)
         throw err
       } finally {
         await context.close().catch(() => null)
