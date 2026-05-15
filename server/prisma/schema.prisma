@@ -38,8 +38,6 @@ model Profile {
   resumePath       String?
   resumeText       String?
   bio              String?
-  linkedinEmail    String?
-  linkedinPassword String?
 }
 
 model CommonAnswer {

@@ -63,6 +63,7 @@ function QuickApplyButton({ job, adminMode }: { job: JobMatch; adminMode: boolea
           company: job.company,
           link: job.link,
           location: job.location,
+          isEasyApply: !!job.isEasyApply,
         }),
       })
       if (res.status === 409) {

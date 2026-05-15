@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Upload, Plus, Trash2, FileText, CheckCircle, Eye, EyeOff, Mail, Send } from 'lucide-react'
+import { Upload, Plus, Trash2, FileText, CheckCircle, Mail, Send } from 'lucide-react'
 import api from '../lib/api'
 import Spinner from '../components/ui/Spinner'
 import AutocompleteInput from '../components/ui/AutocompleteInput'
@@ -23,7 +23,6 @@ export default function Profile() {
   const [newAnswer, setNewAnswer] = useState('')
   const [profileSaved, setProfileSaved] = useState(false)
   const [autofilled, setAutofilled] = useState(false)
-  const [showLinkedInPassword, setShowLinkedInPassword] = useState(false)
   const [digestSaved, setDigestSaved] = useState(false)
   const [digestJobId, setDigestJobId] = useState<string | null>(null)
   const [prefForm, setPrefForm] = useState({
@@ -35,7 +34,6 @@ export default function Profile() {
   const [form, setForm] = useState({
     firstName: '', lastName: '', phone: '', address: '',
     city: '', state: '', zip: '', country: 'US', linkedinUrl: '', portfolioUrl: '', bio: '',
-    linkedinEmail: '', linkedinPassword: '',
   })
 
   useQuery({
@@ -100,8 +98,6 @@ export default function Profile() {
           linkedinUrl: data.profile.linkedinUrl || '',
           portfolioUrl: data.profile.portfolioUrl || '',
           bio: data.profile.bio || '',
-          linkedinEmail: data.profile.linkedinEmail || '',
-          linkedinPassword: data.profile.linkedinPassword || '',
         })
       }
       return data
@@ -288,56 +284,6 @@ export default function Profile() {
             />
           </div>
         </div>
-        <button
-          onClick={() => saveProfile.mutate()}
-          disabled={saveProfile.isPending}
-          className="mt-4 px-6 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-60 transition-colors flex items-center gap-2"
-        >
-          {saveProfile.isPending ? <Spinner size="sm" /> : profileSaved ? <CheckCircle className="w-4 h-4" /> : null}
-          {profileSaved ? 'Saved!' : 'Save Profile'}
-        </button>
-      </section>
-
-      {/* LinkedIn Credentials */}
-      <section className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
-        <h2 className="font-semibold text-slate-900 mb-1">LinkedIn Easy Apply</h2>
-        <p className="text-sm text-slate-500 mb-4">
-          Required for auto-applying to LinkedIn jobs with Easy Apply. Credentials are stored locally and only used by the apply worker.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1.5">LinkedIn Email</label>
-            <input
-              type="email"
-              value={form.linkedinEmail}
-              onChange={(e) => setForm((f) => ({ ...f, linkedinEmail: e.target.value }))}
-              placeholder="your@email.com"
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1.5">LinkedIn Password</label>
-            <div className="relative">
-              <input
-                type={showLinkedInPassword ? 'text' : 'password'}
-                value={form.linkedinPassword}
-                onChange={(e) => setForm((f) => ({ ...f, linkedinPassword: e.target.value }))}
-                placeholder="••••••••"
-                className="w-full px-3 py-2 pr-9 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-              <button
-                type="button"
-                onClick={() => setShowLinkedInPassword((v) => !v)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                {showLinkedInPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-        </div>
-        <p className="text-xs text-amber-600 mt-3">
-          Note: LinkedIn may require 2FA verification on first login. If that happens, the worker will fail with a checkpoint error — run the worker manually once to resolve it.
-        </p>
         <button
           onClick={() => saveProfile.mutate()}
           disabled={saveProfile.isPending}

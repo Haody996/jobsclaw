@@ -24,16 +24,16 @@ router.get('/', authMiddleware, async (req: AuthRequest, res: Response): Promise
 
 // PUT /api/profile
 router.put('/', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
-  const { firstName, lastName, phone, address, city, state, zip, country, linkedinUrl, portfolioUrl, bio, linkedinEmail, linkedinPassword } = req.body
+  const { firstName, lastName, phone, address, city, state, zip, country, linkedinUrl, portfolioUrl, bio } = req.body
 
   const profile = await prisma.profile.upsert({
     where: { userId: req.userId! },
-    update: { firstName, lastName, phone, address, city, state, zip, country, linkedinUrl, portfolioUrl, bio, linkedinEmail, linkedinPassword },
+    update: { firstName, lastName, phone, address, city, state, zip, country, linkedinUrl, portfolioUrl, bio },
     create: {
       userId: req.userId!,
       firstName: firstName || '',
       lastName: lastName || '',
-      phone, address, city, state, zip, country, linkedinUrl, portfolioUrl, bio, linkedinEmail, linkedinPassword,
+      phone, address, city, state, zip, country, linkedinUrl, portfolioUrl, bio,
     },
   })
 

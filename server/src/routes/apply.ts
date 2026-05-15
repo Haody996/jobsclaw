@@ -69,7 +69,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response): Promis
 
 // POST /api/apply/quick — one-click apply from AI match (no existing Job record needed)
 router.post('/quick', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
-  const { title, company, link, location, skipQueue } = req.body
+  const { title, company, link, location, isEasyApply, skipQueue } = req.body
 
   if (!link) {
     res.status(400).json({ error: 'Job link is required' })
@@ -86,7 +86,7 @@ router.post('/quick', authMiddleware, async (req: AuthRequest, res: Response): P
   const externalId = `linkedin-${Buffer.from(link).toString('base64url').slice(0, 64)}`
   const job = await prisma.job.upsert({
     where: { externalId },
-    update: { fetchedAt: new Date() },
+    update: { fetchedAt: new Date(), isEasyApply: !!isEasyApply },
     create: {
       externalId,
       title: title || 'Unknown',
@@ -95,6 +95,7 @@ router.post('/quick', authMiddleware, async (req: AuthRequest, res: Response): P
       description: '',
       url: link,
       source: 'linkedin',
+      isEasyApply: !!isEasyApply,
     },
   })
 

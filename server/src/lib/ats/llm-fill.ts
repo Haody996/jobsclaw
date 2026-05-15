@@ -191,9 +191,16 @@ ${answers.map((qa) => `Q: ${qa.question}\nA: ${qa.answer}`).join('\n') || 'None'
 Form fields to fill:
 ${JSON.stringify(customFields, null, 2)}`
 
+  if (!process.env.GEMINI_API_KEY) {
+    console.error('[llm-fill] GEMINI_API_KEY not set — skipping custom-question fill for', customFields.length, 'field(s)')
+    return
+  }
+
+  let rawResponse: string | null = null
   try {
     const result = await model.generateContent(prompt)
-    const actions = JSON.parse(result.response.text()) as FillAction[]
+    rawResponse = result.response.text()
+    const actions = JSON.parse(rawResponse) as FillAction[]
     console.log(`[llm-fill] LLM returned ${actions.length} fill action(s):`,
       actions.map((a) => `"${a.id}"="${a.value?.slice(0, 40) ?? ''}"`)
     )
@@ -205,7 +212,12 @@ ${JSON.stringify(customFields, null, 2)}`
         await applyFill(page, field, action.value)
       }
     }
-  } catch (err) {
-    console.warn('[llm-fill] Custom question fill failed:', err)
+  } catch (err: any) {
+    console.error('[llm-fill] ERROR — custom question fill failed:')
+    console.error('[llm-fill]   message:', err?.message || err)
+    if (err?.status) console.error('[llm-fill]   status:', err.status)
+    if (err?.errorDetails) console.error('[llm-fill]   errorDetails:', JSON.stringify(err.errorDetails))
+    if (rawResponse) console.error('[llm-fill]   rawResponse (first 500 chars):', rawResponse.slice(0, 500))
+    if (err?.stack) console.error('[llm-fill]   stack:', err.stack)
   }
 }
