@@ -59,6 +59,27 @@ function normalize(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 }
 
+// Strip trailing legal-entity suffixes so "Parsec Automation, LLC" and
+// "Parsec Automation Corp." normalize to the same thing.
+const LEGAL_SUFFIXES = [
+  'llc', 'inc', 'incorporated', 'corp', 'corporation', 'ltd', 'limited',
+  'co', 'company', 'lp', 'llp', 'plc', 'gmbh', 'ag', 'sa', 'srl', 'bv', 'pllc', 'pc',
+]
+function normalizeCompany(s: string): string {
+  let n = normalize(s)
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const suf of LEGAL_SUFFIXES) {
+      if (n.endsWith(' ' + suf)) {
+        n = n.slice(0, -(suf.length + 1)).trim()
+        changed = true
+      }
+    }
+  }
+  return n
+}
+
 // Sites we cannot get past without a real session (Cloudflare/captcha/login).
 // We exclude them as candidate apply URLs unless nothing else is available.
 const BOT_PROTECTED_HOSTS = ['ziprecruiter.com', 'glassdoor.com', 'monster.com', 'simplyhired.com']
@@ -86,7 +107,7 @@ async function resolveDirectApplyUrl(
   ]
 
   const wantTitle = normalize(title)
-  const wantCompany = normalize(company)
+  const wantCompany = normalizeCompany(company)
 
   type Candidate = { link: string; publisher: string; isDirect: boolean; matchScore: number }
   const seen = new Set<string>()
@@ -104,7 +125,7 @@ async function resolveDirectApplyUrl(
 
     for (const j of results) {
       const t = normalize(j.job_title)
-      const c = normalize(j.employer_name)
+      const c = normalizeCompany(j.employer_name)
       const titleMatch = t === wantTitle ? 2 : (t.includes(wantTitle) || wantTitle.includes(t) ? 1 : 0)
       const companyMatch = c === wantCompany ? 2 : (c.includes(wantCompany) || wantCompany.includes(c) ? 1 : 0)
       if (companyMatch === 0 || titleMatch === 0) continue
