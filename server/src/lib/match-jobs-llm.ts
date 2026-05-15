@@ -9,6 +9,8 @@ export interface JobMatch {
   match_rationale: string
   compatibility_score: number
   isEasyApply?: boolean
+  /** Real, fillable apply URL resolved via jsearch at sourcing time. */
+  applyUrl?: string
 }
 
 export interface MatchSection {

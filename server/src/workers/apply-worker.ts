@@ -15,7 +15,7 @@ import { workdayAdapter } from '../lib/ats/workday'
 import { icimsAdapter } from '../lib/ats/icims'
 import { genericAdapter } from '../lib/ats/generic'
 import { fillCustomQuestionsWithLLM } from '../lib/ats/llm-fill'
-import { searchJobs } from '../lib/jsearch'
+import { resolveApplyUrls } from '../lib/resolve-apply-url'
 import type { ATSAdapter, ApplyContext } from '../lib/ats/types'
 
 chromiumExtra.use(stealth())
@@ -47,118 +47,8 @@ async function launchBrowser(): Promise<Browser> {
   })
 }
 
-// ─── LinkedIn → direct ATS URL resolver ──────────────────────────────────
-// LinkedIn hides the external apply URL from logged-out scrapers (the
-// "Apply on company site" button just opens a sign-in modal). We resolve
-// the job to its real ATS URL via jsearch (a 3rd-party job API that
-// aggregates listings across LinkedIn/Indeed/ZipRecruiter/etc. and exposes
-// the direct apply link). Returns null if no matching non-LinkedIn URL
-// can be found.
-
-function normalize(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
-}
-
-// Strip trailing legal-entity suffixes so "Parsec Automation, LLC" and
-// "Parsec Automation Corp." normalize to the same thing.
-const LEGAL_SUFFIXES = [
-  'llc', 'inc', 'incorporated', 'corp', 'corporation', 'ltd', 'limited',
-  'co', 'company', 'lp', 'llp', 'plc', 'gmbh', 'ag', 'sa', 'srl', 'bv', 'pllc', 'pc',
-]
-function normalizeCompany(s: string): string {
-  let n = normalize(s)
-  let changed = true
-  while (changed) {
-    changed = false
-    for (const suf of LEGAL_SUFFIXES) {
-      if (n.endsWith(' ' + suf)) {
-        n = n.slice(0, -(suf.length + 1)).trim()
-        changed = true
-      }
-    }
-  }
-  return n
-}
-
-// Sites we cannot get past without a real session (Cloudflare/captcha/login).
-// We exclude them as candidate apply URLs unless nothing else is available.
-const BOT_PROTECTED_HOSTS = ['ziprecruiter.com', 'glassdoor.com', 'monster.com', 'simplyhired.com']
-
-// Known ATS hosts our adapters can actually fill. Higher priority.
-const DIRECT_ATS_HOSTS = ['greenhouse.io', 'boards.greenhouse', 'lever.co', 'ashbyhq.com', 'myworkdayjobs.com', 'icims.com']
-
-function urlScore(link: string): number {
-  if (!link) return -100
-  if (link.includes('linkedin.com')) return -100
-  if (DIRECT_ATS_HOSTS.some((h) => link.includes(h))) return 100
-  if (BOT_PROTECTED_HOSTS.some((h) => link.includes(h))) return -50
-  if (link.includes('indeed.com')) return 0 // dedicated flow, but frequently Cloudflare-gated — try last
-  return 10 // unknown host, prefer over bot-protected/indeed but below direct ATS
-}
-
-async function resolveApplyUrls(
-  title: string,
-  company: string,
-  location?: string | null
-): Promise<string[]> {
-  const queries = [
-    `${title} at ${company}${location ? ' ' + location : ''}`,
-    `${title} ${company}`,
-    `"${company}" "${title}"`,
-  ]
-
-  const wantTitle = normalize(title)
-  const wantCompany = normalizeCompany(company)
-
-  type Candidate = { link: string; publisher: string; isDirect: boolean; matchScore: number }
-  const seen = new Set<string>()
-  const candidates: Candidate[] = []
-
-  for (const q of queries) {
-    let results: Awaited<ReturnType<typeof searchJobs>> = []
-    try {
-      results = await searchJobs({ q, num_pages: 1 })
-    } catch (err: any) {
-      console.error('[apply:jsearch] query failed:', q, '→', err?.message || err)
-      continue
-    }
-    dbg('jsearch', `query="${q}" → ${results.length} results`)
-
-    for (const j of results) {
-      const t = normalize(j.job_title)
-      const c = normalizeCompany(j.employer_name)
-      const titleMatch = t === wantTitle ? 2 : (t.includes(wantTitle) || wantTitle.includes(t) ? 1 : 0)
-      const companyMatch = c === wantCompany ? 2 : (c.includes(wantCompany) || wantCompany.includes(c) ? 1 : 0)
-      if (companyMatch === 0 || titleMatch === 0) continue
-      const matchScore = titleMatch + companyMatch
-
-      const opts: { link: string; publisher: string; isDirect: boolean }[] = []
-      if (j.apply_options && j.apply_options.length) {
-        for (const o of j.apply_options) opts.push({ link: o.apply_link, publisher: o.publisher, isDirect: !!o.is_direct })
-      } else if (j.job_apply_link) {
-        opts.push({ link: j.job_apply_link, publisher: j.job_publisher || '?', isDirect: !!j.job_apply_is_direct })
-      }
-      for (const o of opts) {
-        if (!o.link || seen.has(o.link)) continue
-        seen.add(o.link)
-        candidates.push({ ...o, matchScore })
-      }
-    }
-  }
-
-  if (candidates.length === 0) return []
-
-  const ranked = candidates
-    .map((c) => ({ ...c, total: urlScore(c.link) + (c.isDirect ? 50 : 0) + c.matchScore * 5 }))
-    .sort((a, b) => b.total - a.total)
-
-  dbg('jsearch', `${ranked.length} candidate(s) — top 5:`,
-    ranked.slice(0, 5).map((c) => `[${c.total}] ${c.publisher}${c.isDirect ? '*' : ''} ${c.link.slice(0, 70)}`).join(' | '))
-
-  // Keep anything that isn't LinkedIn / fully bot-protected. The worker tries
-  // them in ranked order until one yields a fillable, submittable form.
-  return ranked.filter((c) => c.total > -50).map((c) => c.link)
-}
+// LinkedIn → direct ATS URL resolution lives in ../lib/resolve-apply-url
+// (shared with the sourcing worker, which stamps each match with a URL).
 
 // ─── Indeed (may redirect to company ATS) ────────────────────────────────
 
@@ -417,18 +307,28 @@ async function runApply(data: ApplyJobData): Promise<void> {
     }
 
     // For non-Easy-Apply LinkedIn jobs, LinkedIn's public job page hides the
-    // external apply URL behind a sign-in wall. Resolve candidate URLs via
-    // jsearch; the worker then tries each in ranked order.
+    // external apply URL behind a sign-in wall. The sourcing worker already
+    // resolves and stamps a real apply URL onto each match (job.applyUrl);
+    // use it first, then fall back to a live jsearch lookup for more
+    // candidates. The worker tries each in ranked order.
     let candidateUrls: string[]
     if (ats === 'linkedin') {
-      dbg('linkedin', `looking up direct apply URL via jsearch for "${job.title}" @ "${job.company}"`)
-      candidateUrls = await resolveApplyUrls(job.title, job.company, job.location)
+      candidateUrls = []
+      if (job.applyUrl && !job.applyUrl.includes('linkedin.com')) {
+        dbg('linkedin', `using pre-resolved applyUrl from match: ${job.applyUrl}`)
+        candidateUrls.push(job.applyUrl)
+      }
+      dbg('linkedin', `live jsearch lookup for "${job.title}" @ "${job.company}"`)
+      const live = await resolveApplyUrls(job.title, job.company, job.location)
+      for (const u of live) {
+        if (!candidateUrls.includes(u)) candidateUrls.push(u)
+      }
       if (candidateUrls.length === 0) {
         throw new Error(`Could not resolve a direct apply URL for "${job.title}" at ${job.company}. LinkedIn hides the external URL behind a login wall and jsearch returned no usable non-LinkedIn link — please apply manually.`)
       }
       dbg('linkedin', `${candidateUrls.length} candidate URL(s) to try`)
     } else {
-      candidateUrls = [job.url]
+      candidateUrls = [job.applyUrl || job.url]
     }
 
     browser = await launchBrowser()

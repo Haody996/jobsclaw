@@ -56,6 +56,7 @@ model Job {
   location     String?
   description  String
   url          String
+  applyUrl     String?
   source       String
   salary       String?
   jobType      String?

@@ -6,6 +6,7 @@ import { scrapeLinkedInJobs } from '../lib/scrape-linkedin'
 import { scrapeTheMuseJobs, scrapeArbeitnowJobs } from '../lib/scrape-indeed'
 import { matchJobsToResume } from '../lib/match-jobs-llm'
 import { sendDigestEmail } from '../lib/send-email'
+import { resolveBestApplyUrl } from '../lib/resolve-apply-url'
 import type { ScrapedJob } from '../lib/scrape-linkedin'
 import type { JobMatch, MatchSection } from '../lib/match-jobs-llm'
 
@@ -44,6 +45,24 @@ async function scrapeForKeywords(keywords: string, location: string, fetchCount:
     seen.add(key)
     return true
   })
+}
+
+// Stamp each match with a real, fillable apply URL so Auto Apply doesn't have
+// to resolve it later. Non-LinkedIn sources (The Muse, Arbeitnow) already link
+// straight to the company's apply page; LinkedIn links are resolved via jsearch.
+async function stampApplyUrls(matches: JobMatch[]): Promise<void> {
+  for (const m of matches) {
+    if (!m.link.includes('linkedin.com')) {
+      m.applyUrl = m.link
+      continue
+    }
+    try {
+      const url = await resolveBestApplyUrl(m.title, m.company, m.location)
+      if (url) m.applyUrl = url
+    } catch (err: any) {
+      console.warn(`[sourcing-worker] applyUrl resolve failed for "${m.title}" @ "${m.company}": ${err?.message || err}`)
+    }
+  }
 }
 
 interface GuestData {
@@ -194,6 +213,9 @@ const worker = new Worker(
         sections.push({ searchTitle: kw, matches: [] })
         continue
       }
+
+      await progress(job, `Resolving apply links for "${kw}"…`, pctBase + 25, `${matches.length} matches`)
+      await stampApplyUrls(matches)
 
       sections.push({ searchTitle: kw, matches })
       allLinks.push(...matches.map((m) => m.link))

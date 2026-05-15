@@ -70,7 +70,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response): Promis
 
 // POST /api/apply/quick — one-click apply from AI match (no existing Job record needed)
 router.post('/quick', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
-  const { title, company, link, location, isEasyApply, skipQueue } = req.body
+  const { title, company, link, location, isEasyApply, applyUrl, skipQueue } = req.body
 
   if (!link) {
     res.status(400).json({ error: 'Job link is required' })
@@ -83,6 +83,10 @@ router.post('/quick', authMiddleware, async (req: AuthRequest, res: Response): P
     return
   }
 
+  // applyUrl is the real, fillable apply URL the sourcing worker resolved for
+  // this match — pass it through so the apply worker can skip re-resolving.
+  const directUrl = typeof applyUrl === 'string' && applyUrl ? applyUrl : null
+
   // Upsert a Job record so the apply worker can use it.
   // Use a SHA-256 hash of the link to guarantee per-URL uniqueness — the
   // previous base64-truncated-to-64-chars scheme collided on every LinkedIn
@@ -91,7 +95,7 @@ router.post('/quick', authMiddleware, async (req: AuthRequest, res: Response): P
   const externalId = `linkedin-${createHash('sha256').update(link).digest('hex').slice(0, 32)}`
   const job = await prisma.job.upsert({
     where: { externalId },
-    update: { fetchedAt: new Date(), isEasyApply: !!isEasyApply },
+    update: { fetchedAt: new Date(), isEasyApply: !!isEasyApply, ...(directUrl ? { applyUrl: directUrl } : {}) },
     create: {
       externalId,
       title: title || 'Unknown',
@@ -99,6 +103,7 @@ router.post('/quick', authMiddleware, async (req: AuthRequest, res: Response): P
       location: location || null,
       description: '',
       url: link,
+      applyUrl: directUrl,
       source: 'linkedin',
       isEasyApply: !!isEasyApply,
     },

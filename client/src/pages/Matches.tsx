@@ -15,6 +15,7 @@ interface JobMatch {
   match_rationale: string
   compatibility_score?: number
   isEasyApply?: boolean
+  applyUrl?: string
 }
 
 interface MatchSection {
@@ -64,6 +65,7 @@ function QuickApplyButton({ job, adminMode }: { job: JobMatch; adminMode: boolea
           link: job.link,
           location: job.location,
           isEasyApply: !!job.isEasyApply,
+          applyUrl: job.applyUrl,
         }),
       })
       if (res.status === 409) {
