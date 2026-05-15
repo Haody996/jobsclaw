@@ -7,11 +7,13 @@ import HelpButton from './HelpButton'
 const navItems = [
   { to: '/matches', label: 'AI Matches', icon: Sparkles, exact: false },
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, exact: false },
-  { to: '/applications', label: 'Applications', icon: FileText, exact: false },
   { to: '/profile', label: 'Profile', icon: User, exact: false },
 ]
 
-const adminNavItem = { to: '/admin', label: 'Admin', icon: ShieldCheck, exact: false }
+const adminNavItems = [
+  { to: '/applications', label: 'Applications', icon: FileText, exact: false },
+  { to: '/admin', label: 'Admin', icon: ShieldCheck, exact: false },
+]
 
 function JobsClawIcon({ className }: { className?: string }) {
   return <img src="/icon.png" alt="JobsClaw" className={className} />
@@ -24,7 +26,7 @@ export default function Layout() {
   const admin = isAdmin()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
-  const allNavItems = admin ? [...navItems, adminNavItem] : navItems
+  const allNavItems = admin ? [...navItems, ...adminNavItems] : navItems
 
   function openLogin() {
     navigate('/login', { state: { backgroundLocation: location } })

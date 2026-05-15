@@ -31,8 +31,20 @@ interface MatchRun {
 
 type AutoApplyState = 'idle' | 'loading' | 'queued' | 'error'
 
+const QUEUED_KEY = 'jobsclaw_auto_queued'
+
+function getQueuedLinks(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(QUEUED_KEY) || '[]')) } catch { return new Set() }
+}
+function markQueued(link: string) {
+  const s = getQueuedLinks(); s.add(link)
+  localStorage.setItem(QUEUED_KEY, JSON.stringify([...s]))
+}
+
 function QuickApplyButton({ job, adminMode }: { job: JobMatch; adminMode: boolean }) {
-  const [autoState, setAutoState] = useState<AutoApplyState>('idle')
+  const [autoState, setAutoState] = useState<AutoApplyState>(() =>
+    getQueuedLinks().has(job.link) ? 'queued' : 'idle'
+  )
   const [errorMsg, setErrorMsg] = useState('')
 
   async function handleAutoApply() {
@@ -54,7 +66,7 @@ function QuickApplyButton({ job, adminMode }: { job: JobMatch; adminMode: boolea
         }),
       })
       if (res.status === 409) {
-        // Already applied
+        markQueued(job.link)
         setAutoState('queued')
         return
       }
@@ -62,6 +74,7 @@ function QuickApplyButton({ job, adminMode }: { job: JobMatch; adminMode: boolea
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'Failed to queue')
       }
+      markQueued(job.link)
       setAutoState('queued')
     } catch (err: any) {
       setErrorMsg(err.message || 'Error')
