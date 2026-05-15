@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import prisma from '../lib/prisma'
 import { scheduleUserDigest, unscheduleUserDigest, sourcingQueue } from '../scheduler'
+import { consumeSearch, getQuota, SEARCH_LIMIT } from '../lib/search-quota'
 
 const router = Router()
 
@@ -78,9 +79,35 @@ router.get('/trigger/guest/:jobId', async (req, res) => {
   }
 })
 
+// GET /api/preferences/quota — daily search quota for the current user
+router.get('/quota', authMiddleware, async (req: AuthRequest, res) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.userId! }, select: { isAdmin: true } })
+    if (user?.isAdmin) {
+      res.json({ used: 0, limit: null, remaining: null, resetAt: null, isAdmin: true })
+      return
+    }
+    const status = await getQuota(req.userId!)
+    res.json({ ...status, isAdmin: false })
+  } catch {
+    res.status(500).json({ error: 'Failed to get quota' })
+  }
+})
+
 // POST /api/preferences/trigger — queue an immediate digest, return jobId for polling
 router.post('/trigger', authMiddleware, async (req: AuthRequest, res) => {
   try {
+    const user = await prisma.user.findUnique({ where: { id: req.userId! }, select: { isAdmin: true } })
+    if (!user?.isAdmin) {
+      const denied = await consumeSearch(req.userId!)
+      if (denied) {
+        res.status(429).json({
+          error: `Daily search limit reached (${SEARCH_LIMIT}/day)`,
+          ...denied,
+        })
+        return
+      }
+    }
     const jobId = `manual-${req.userId!}-${Date.now()}`
     await sourcingQueue.add('send-digest', { userId: req.userId!, manual: true }, { jobId })
     res.json({ jobId })

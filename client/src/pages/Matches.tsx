@@ -150,6 +150,15 @@ function readGuestPrefs() {
   try { return JSON.parse(localStorage.getItem('jobsclaw_guest') || 'null') } catch { return null }
 }
 
+function formatResetIn(resetAt: number | null): string {
+  if (!resetAt) return ''
+  const ms = resetAt - Date.now()
+  if (ms <= 0) return 'now'
+  const h = Math.floor(ms / 3_600_000)
+  const m = Math.floor((ms % 3_600_000) / 60_000)
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
+}
+
 export default function Matches() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -275,9 +284,32 @@ export default function Matches() {
     },
   })
 
+  const [quotaError, setQuotaError] = useState<string | null>(null)
+
+  const { data: quota } = useQuery<{
+    used: number; limit: number | null; remaining: number | null; resetAt: number | null; isAdmin: boolean
+  }>({
+    queryKey: ['searchQuota'],
+    enabled: authed,
+    queryFn: async () => { const { data } = await api.get('/preferences/quota'); return data },
+  })
+
   const triggerDigest = useMutation({
     mutationFn: async () => { await api.put('/preferences', prefForm); return api.post('/preferences/trigger') },
-    onSuccess: ({ data }) => { queryClient.invalidateQueries({ queryKey: ['preferences'] }); setDigestJobId(data.jobId) },
+    onSuccess: ({ data }) => {
+      queryClient.invalidateQueries({ queryKey: ['preferences'] })
+      queryClient.invalidateQueries({ queryKey: ['searchQuota'] })
+      setQuotaError(null)
+      setDigestJobId(data.jobId)
+    },
+    onError: (err: any) => {
+      queryClient.invalidateQueries({ queryKey: ['searchQuota'] })
+      if (err?.response?.status === 429) {
+        setQuotaError(err.response.data?.error || 'Daily search limit reached')
+      } else {
+        setQuotaError(err?.response?.data?.error || 'Failed to start search')
+      }
+    },
   })
 
   const triggerGuestDigest = useMutation({
@@ -393,15 +425,33 @@ export default function Matches() {
         {/* Action bar */}
         <div className="flex items-center gap-3 p-4">
           {authed ? (
-            <button
-              onClick={() => { setDigestJobId(null); triggerDigest.mutate() }}
-              disabled={isRunning || triggerDigest.isPending || !prefForm.keywords}
-              title={!prefForm.keywords ? 'Set keywords first — click Setup' : 'Run AI matching now'}
-              className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-medium rounded-lg hover:from-indigo-700 hover:to-violet-700 shadow-sm hover:shadow-md active:scale-[0.97] disabled:opacity-50 transition-all duration-150 flex items-center gap-2"
-            >
-              {isRunning || triggerDigest.isPending ? <Spinner size="sm" /> : <Send className="w-4 h-4" />}
-              {isRunning ? 'Running…' : 'Send Now'}
-            </button>
+            <>
+              <button
+                onClick={() => { setDigestJobId(null); triggerDigest.mutate() }}
+                disabled={isRunning || triggerDigest.isPending || !prefForm.keywords || (quota?.remaining === 0)}
+                title={
+                  !prefForm.keywords ? 'Set keywords first — click Setup'
+                  : quota?.remaining === 0 ? `Daily limit reached — resets in ${formatResetIn(quota.resetAt)}`
+                  : 'Run AI matching now'
+                }
+                className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-medium rounded-lg hover:from-indigo-700 hover:to-violet-700 shadow-sm hover:shadow-md active:scale-[0.97] disabled:opacity-50 transition-all duration-150 flex items-center gap-2"
+              >
+                {isRunning || triggerDigest.isPending ? <Spinner size="sm" /> : <Send className="w-4 h-4" />}
+                {isRunning ? 'Running…' : 'Send Now'}
+              </button>
+              {quota && !quota.isAdmin && quota.limit != null && (
+                <span
+                  className={`text-xs font-medium px-2.5 py-1 rounded-full border ${
+                    quota.remaining === 0 ? 'bg-red-50 text-red-700 border-red-200'
+                    : (quota.remaining ?? 0) === 1 ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  }`}
+                  title={quota.remaining === 0 ? `Resets in ${formatResetIn(quota.resetAt)}` : ''}
+                >
+                  {quota.remaining}/{quota.limit} left today
+                </span>
+              )}
+            </>
           ) : (
             <button
               onClick={() => triggerGuestDigest.mutate()}
@@ -439,6 +489,22 @@ export default function Matches() {
             {showSetup ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
         </div>
+
+        {/* Quota error notice */}
+        {quotaError && (
+          <div className="border-t border-slate-100 bg-red-50 px-4 py-2.5 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm text-red-700">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>
+                {quotaError}
+                {quota?.resetAt && <span className="text-red-500"> — resets in {formatResetIn(quota.resetAt)}</span>}
+              </span>
+            </div>
+            <button onClick={() => setQuotaError(null)} className="text-red-400 hover:text-red-600 transition-colors flex-shrink-0">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Progress bar */}
         {activeJobId && activeProgress && (
@@ -731,8 +797,12 @@ export default function Matches() {
                 </button>
                 <button
                   onClick={() => { setDigestJobId(null); triggerDigest.mutate() }}
-                  disabled={isRunning || triggerDigest.isPending || !prefForm.keywords}
-                  title={!prefForm.keywords ? 'Set keywords first' : 'Run AI matching now'}
+                  disabled={isRunning || triggerDigest.isPending || !prefForm.keywords || (quota?.remaining === 0)}
+                  title={
+                    !prefForm.keywords ? 'Set keywords first'
+                    : quota?.remaining === 0 ? `Daily limit reached — resets in ${formatResetIn(quota.resetAt)}`
+                    : 'Run AI matching now'
+                  }
                   className="px-4 py-2 bg-gradient-to-r from-violet-500 to-purple-500 text-white text-sm font-medium rounded-lg hover:from-violet-600 hover:to-purple-600 shadow-sm hover:shadow-md active:scale-[0.97] disabled:opacity-50 transition-all duration-150 flex items-center gap-2"
                 >
                   {isRunning || triggerDigest.isPending ? <Spinner size="sm" /> : <Send className="w-4 h-4" />}
