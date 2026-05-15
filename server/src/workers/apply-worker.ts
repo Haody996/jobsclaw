@@ -92,14 +92,15 @@ function urlScore(link: string): number {
   if (link.includes('linkedin.com')) return -100
   if (DIRECT_ATS_HOSTS.some((h) => link.includes(h))) return 100
   if (BOT_PROTECTED_HOSTS.some((h) => link.includes(h))) return -50
-  return 10 // unknown host, prefer over bot-protected but below ATS
+  if (link.includes('indeed.com')) return 0 // dedicated flow, but frequently Cloudflare-gated — try last
+  return 10 // unknown host, prefer over bot-protected/indeed but below direct ATS
 }
 
-async function resolveDirectApplyUrl(
+async function resolveApplyUrls(
   title: string,
   company: string,
   location?: string | null
-): Promise<string | null> {
+): Promise<string[]> {
   const queries = [
     `${title} at ${company}${location ? ' ' + location : ''}`,
     `${title} ${company}`,
@@ -145,21 +146,18 @@ async function resolveDirectApplyUrl(
     }
   }
 
-  if (candidates.length === 0) return null
+  if (candidates.length === 0) return []
 
   const ranked = candidates
     .map((c) => ({ ...c, total: urlScore(c.link) + (c.isDirect ? 50 : 0) + c.matchScore * 5 }))
     .sort((a, b) => b.total - a.total)
 
-  dbg('jsearch', `${ranked.length} candidate(s) — top 3:`,
-    ranked.slice(0, 3).map((c) => `[${c.total}] ${c.publisher}${c.isDirect ? '*' : ''} ${c.link.slice(0, 80)}`).join(' | '))
+  dbg('jsearch', `${ranked.length} candidate(s) — top 5:`,
+    ranked.slice(0, 5).map((c) => `[${c.total}] ${c.publisher}${c.isDirect ? '*' : ''} ${c.link.slice(0, 70)}`).join(' | '))
 
-  const best = ranked[0]
-  if (best.total < 0) {
-    dbg('jsearch', `best candidate is bot-protected or LinkedIn (score=${best.total}) — bailing`)
-    return null
-  }
-  return best.link
+  // Keep anything that isn't LinkedIn / fully bot-protected. The worker tries
+  // them in ranked order until one yields a fillable, submittable form.
+  return ranked.filter((c) => c.total > -50).map((c) => c.link)
 }
 
 // ─── Indeed (may redirect to company ATS) ────────────────────────────────
@@ -174,7 +172,10 @@ async function runIndeedApply(
   const context = await browser.newContext()
   const page = await context.newPage()
   try {
-    await page.goto(job.url, { waitUntil: 'domcontentloaded', timeout: 30000 })
+    const resp = await page.goto(job.url, { waitUntil: 'domcontentloaded', timeout: 30000 })
+    await page.waitForTimeout(1500)
+    const blocked = await pageBlockedReason(page, resp ? resp.status() : null)
+    if (blocked) throw new Error(blocked)
 
     const applyBtnSelectors = [
       '[data-testid="applyButton"]',
@@ -298,6 +299,80 @@ async function captureFailure(page: any, applicationId: string, tag: string): Pr
   }
 }
 
+// Inspect a freshly-navigated page for bot protection or a dead listing.
+// Returns a human-readable reason if the page is unusable, else null.
+async function pageBlockedReason(page: any, status: number | null): Promise<string | null> {
+  if (status != null && status >= 400) {
+    return `apply page returned HTTP ${status} — the job posting was likely removed or expired`
+  }
+  const title = ((await page.title().catch(() => '')) || '').trim()
+  const body = ((await page.locator('body').innerText({ timeout: 3000 }).catch(() => '')) || '').slice(0, 2500)
+  const hay = `${title}\n${body}`.toLowerCase()
+  if (/just a moment|verify you are human|attention required|enable javascript and cookies|cf-browser-verification|are you a robot|checking your browser/i.test(hay)) {
+    return `apply page blocked by bot protection (Cloudflare/captcha): "${title}"`
+  }
+  if (/(page|job|position|posting).{0,24}(not found|no longer (available|exists|open)|has expired|has been removed|been filled|is closed)/i.test(hay)) {
+    return `apply page is gone or expired: "${title}"`
+  }
+  return null
+}
+
+// Attempt to apply against one resolved URL. Throws on any failure so the
+// caller can fall through to the next candidate.
+async function attemptApply(
+  url: string,
+  job: { id: string; title: string; company: string; description: string },
+  profile: ApplyContext['profile'],
+  answers: ApplyContext['answers'],
+  email: string,
+  browser: Browser,
+  applicationId: string
+): Promise<void> {
+  if (detectATS(url) === 'indeed') {
+    await runIndeedApply({ ...job, url }, profile, answers, email, browser)
+    return
+  }
+
+  const context = await browser.newContext()
+  const page = await context.newPage()
+  try {
+    let workingUrl = url
+    const resp = await page.goto(workingUrl, { waitUntil: 'domcontentloaded', timeout: 30000 })
+    await page.waitForTimeout(2000)
+    const blocked = await pageBlockedReason(page, resp ? resp.status() : null)
+    if (blocked) throw new Error(blocked)
+
+    // Aggregator unwrap: Built In and similar list-and-link sites embed the
+    // real ATS URL in an Apply-Now anchor. Follow it before invoking an adapter.
+    if (/builtin\.com|wellfound\.com|otta\.com|welcometothejungle\.com/.test(workingUrl)) {
+      const href = await page
+        .locator('a[aria-label*="Apply" i][href^="http"]')
+        .first()
+        .getAttribute('href')
+        .catch(() => null)
+      if (href && !href.includes('builtin.com') && !/\/auth\/|\/login/.test(href)) {
+        dbg('aggregator', `unwrapped ${workingUrl} → ${href}`)
+        workingUrl = href
+        const r2 = await page.goto(workingUrl, { waitUntil: 'domcontentloaded', timeout: 30000 })
+        await page.waitForTimeout(2000)
+        const b2 = await pageBlockedReason(page, r2 ? r2.status() : null)
+        if (b2) throw new Error(b2)
+      } else {
+        dbg('aggregator', `no external apply link found on aggregator page (href=${href ?? 'null'})`)
+      }
+    }
+
+    const adapter = getAdapter(workingUrl)
+    dbg('adapter', `using ${adapter.name} for ${workingUrl}`)
+    await adapter.apply({ page, job: { ...job, url: workingUrl }, profile, email, answers })
+  } catch (err) {
+    await captureFailure(page, applicationId, 'attempt').catch(() => null)
+    throw err
+  } finally {
+    await context.close().catch(() => null)
+  }
+}
+
 // ─── Main orchestrator ────────────────────────────────────────────────────
 
 async function runApply(data: ApplyJobData): Promise<void> {
@@ -342,75 +417,38 @@ async function runApply(data: ApplyJobData): Promise<void> {
     }
 
     // For non-Easy-Apply LinkedIn jobs, LinkedIn's public job page hides the
-    // external apply URL behind a sign-in wall. Resolve it via jsearch first.
-    let workingUrl = job.url
-    let effectiveAts = ats
+    // external apply URL behind a sign-in wall. Resolve candidate URLs via
+    // jsearch; the worker then tries each in ranked order.
+    let candidateUrls: string[]
     if (ats === 'linkedin') {
       dbg('linkedin', `looking up direct apply URL via jsearch for "${job.title}" @ "${job.company}"`)
-      const directUrl = await resolveDirectApplyUrl(job.title, job.company, job.location)
-      if (!directUrl) {
-        throw new Error(`Could not resolve a direct apply URL for "${job.title}" at ${job.company}. The LinkedIn page requires login to reveal the external URL, and jsearch didn't return a matching non-LinkedIn link.`)
+      candidateUrls = await resolveApplyUrls(job.title, job.company, job.location)
+      if (candidateUrls.length === 0) {
+        throw new Error(`Could not resolve a direct apply URL for "${job.title}" at ${job.company}. LinkedIn hides the external URL behind a login wall and jsearch returned no usable non-LinkedIn link — please apply manually.`)
       }
-      workingUrl = directUrl
-      effectiveAts = detectATS(workingUrl)
-      dbg('linkedin', `resolved → ats=${effectiveAts} url=${workingUrl}`)
+      dbg('linkedin', `${candidateUrls.length} candidate URL(s) to try`)
+    } else {
+      candidateUrls = [job.url]
     }
 
     browser = await launchBrowser()
 
-    if (effectiveAts === 'indeed') {
-      await runIndeedApply({ ...job, url: workingUrl }, profile as ApplyContext['profile'], answers, user.email, browser)
-    } else {
-      const context = await browser.newContext()
-      const page = await context.newPage()
+    const maxTries = Math.min(candidateUrls.length, 4)
+    let applied = false
+    let lastErr: Error | null = null
+    for (let i = 0; i < maxTries; i++) {
+      const url = candidateUrls[i]
       try {
-        // Pre-flight: navigate and check for a bot-protection challenge so we
-        // fail with a clear message instead of "could not find submit button".
-        await page.goto(workingUrl, { waitUntil: 'domcontentloaded', timeout: 30000 })
-        await page.waitForTimeout(2000)
-        const t = (await page.title().catch(() => '')) || ''
-        const txt = (await page.locator('body').innerText({ timeout: 3000 }).catch(() => '')).slice(0, 2000)
-        if (/just a moment|verify you are human|attention required|access denied|are you human/i.test(t + ' ' + txt)) {
-          throw new Error(`Apply page blocked by bot protection (Cloudflare/captcha): "${t.trim()}" at ${workingUrl}`)
-        }
-
-        // Aggregator unwrap: Built In and similar list-and-link sites embed
-        // the real ATS URL in an Apply-Now anchor. Follow it before handing
-        // off to the adapter.
-        if (/builtin\.com|wellfound\.com|otta\.com|welcometothejungle\.com/.test(workingUrl)) {
-          const href = await page
-            .locator('a[aria-label*="Apply" i][href^="http"]')
-            .first()
-            .getAttribute('href')
-            .catch(() => null)
-          if (href && !href.includes('builtin.com') && !/\/auth\/|\/login/.test(href)) {
-            dbg('aggregator', `unwrapped ${workingUrl} → ${href}`)
-            workingUrl = href
-            effectiveAts = detectATS(workingUrl)
-            await page.goto(workingUrl, { waitUntil: 'domcontentloaded', timeout: 30000 })
-            await page.waitForTimeout(2000)
-          } else {
-            dbg('aggregator', `no external apply link found on aggregator page (got href=${href ?? 'null'})`)
-          }
-        }
-
-        const adapter = getAdapter(workingUrl)
-        dbg('adapter', `using ${adapter.name} for ${workingUrl}`)
-
-        await adapter.apply({
-          page,
-          job: { ...job, url: workingUrl },
-          profile: profile as ApplyContext['profile'],
-          email: user.email,
-          answers,
-        })
-      } catch (err) {
-        await captureFailure(page, applicationId, `adapter`).catch(() => null)
-        throw err
-      } finally {
-        await context.close().catch(() => null)
+        dbg('attempt', `candidate ${i + 1}/${maxTries}: ${url}`)
+        await attemptApply(url, job, profile as ApplyContext['profile'], answers, user.email, browser, applicationId)
+        applied = true
+        break
+      } catch (err: any) {
+        lastErr = err
+        dbg('attempt', `candidate ${i + 1} failed: ${err?.message || err}`)
       }
     }
+    if (!applied) throw lastErr ?? new Error('All apply candidates failed')
 
     await prisma.application.update({ where: { id: applicationId }, data: { status: 'SUBMITTED' } })
     dbg('done', `✓ Applied: ${job.title} @ ${job.company} [${ats}] (${applicationId})`)
