@@ -8,8 +8,8 @@ import MatchScoreBadge from '../components/jobs/MatchScoreBadge'
 import Spinner from '../components/ui/Spinner'
 
 const STATUS_CONFIG: Record<string, { label: string; variant: any }> = {
-  PENDING: { label: 'Pending', variant: 'default' },
-  IN_PROGRESS: { label: 'In Progress', variant: 'info' },
+  PENDING: { label: 'Queued', variant: 'default' },
+  IN_PROGRESS: { label: 'Applying…', variant: 'info' },
   SUBMITTED: { label: 'Submitted', variant: 'success' },
   FAILED: { label: 'Failed', variant: 'danger' },
   INTERVIEWING: { label: 'Interviewing', variant: 'purple' },
@@ -18,6 +18,36 @@ const STATUS_CONFIG: Record<string, { label: string; variant: any }> = {
 }
 
 const MANUAL_STATUSES = ['INTERVIEWING', 'REJECTED', 'OFFER']
+
+function StatusProgress({ status }: { status: string }) {
+  const cfg = STATUS_CONFIG[status] || { label: status, variant: 'default' }
+  const isActive = status === 'PENDING' || status === 'IN_PROGRESS'
+  const isDone = status === 'SUBMITTED' || status === 'OFFER'
+  const isFail = status === 'FAILED' || status === 'REJECTED'
+
+  return (
+    <div className="flex flex-col gap-1.5 min-w-[100px]">
+      <Badge variant={cfg.variant}>{cfg.label}</Badge>
+      <div className="h-1 rounded-full bg-slate-100 overflow-hidden relative">
+        {isActive ? (
+          <div
+            className={`absolute inset-y-0 rounded-full animate-indeterminate ${
+              status === 'PENDING'
+                ? 'bg-gradient-to-r from-transparent via-slate-400 to-transparent'
+                : 'bg-gradient-to-r from-transparent via-indigo-500 to-transparent'
+            }`}
+          />
+        ) : (
+          <div
+            className={`h-full ${
+              isDone ? 'bg-emerald-500 w-full' : isFail ? 'bg-red-500 w-full' : 'bg-slate-300 w-full'
+            }`}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
 
 export default function Applications() {
   const queryClient = useQueryClient()
@@ -122,7 +152,6 @@ export default function Applications() {
                 </tr>
               ) : (
                 data?.applications?.map((app: any) => {
-                  const statusCfg = STATUS_CONFIG[app.status] || { label: app.status, variant: 'default' }
                   return (
                     <React.Fragment key={app.id}>
                     <tr
@@ -150,14 +179,14 @@ export default function Applications() {
                       </td>
                       <td className="px-4 py-3.5 text-slate-600">{app.job.company}</td>
                       <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-1.5">
-                          <Badge variant={statusCfg.variant}>{statusCfg.label}</Badge>
+                        <div className="flex items-center gap-2">
+                          <StatusProgress status={app.status} />
                           {app.status === 'FAILED' && (
                             <button
                               onClick={(e) => { e.stopPropagation(); retryApp.mutate(app.id) }}
                               disabled={retryApp.isPending}
                               title="Retry"
-                              className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 disabled:opacity-40 transition-colors"
+                              className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 disabled:opacity-40 transition-colors flex-shrink-0"
                             >
                               {retryApp.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
                             </button>

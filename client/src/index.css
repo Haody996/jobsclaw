@@ -32,3 +32,13 @@ button, [role="button"], a {
 .ripple-ring-delay {
   animation: ripple-out 1.4s ease-out 0.7s infinite;
 }
+
+/* Indeterminate progress bar — used while an auto-apply job is in flight */
+@keyframes indeterminate-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+.animate-indeterminate {
+  animation: indeterminate-slide 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  width: 40%;
+}

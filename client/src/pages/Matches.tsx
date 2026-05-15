@@ -95,10 +95,14 @@ function QuickApplyButton({ job, adminMode }: { job: JobMatch; adminMode: boolea
       {adminMode && !job.isEasyApply ? (
         <div className="flex flex-col items-end gap-1">
           {autoState === 'queued' ? (
-            <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <a
+              href="/applications"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+              title="View progress in Applications"
+            >
               <CheckCircle className="w-3.5 h-3.5" />
-              Queued
-            </span>
+              Queued — view
+            </a>
           ) : (
             <button
               onClick={handleAutoApply}
