@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { isAuthenticated, isAdmin } from './lib/auth'
+import { isAuthenticated } from './lib/auth'
 import Layout from './components/ui/Layout'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -25,16 +25,6 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-function AdminRoute({ children }: { children: React.ReactNode }) {
-  if (!isAuthenticated()) {
-    return <Navigate to="/login" state={{ backgroundLocation: { pathname: '/matches' } }} replace />
-  }
-  if (!isAdmin()) {
-    return <Navigate to="/matches" replace />
-  }
-  return <>{children}</>
-}
-
 function AppRoutes() {
   const location = useLocation()
   const background = (location.state as any)?.backgroundLocation
@@ -50,7 +40,7 @@ function AppRoutes() {
           <Route path="jobs" element={<Jobs />} />
           <Route path="matches" element={<Matches />} />
           <Route path="profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
-          <Route path="applications" element={<AdminRoute><Applications /></AdminRoute>} />
+          <Route path="applications" element={<PrivateRoute><Applications /></PrivateRoute>} />
           <Route path="admin" element={<PrivateRoute><Admin /></PrivateRoute>} />
         </Route>
         {/* Direct /login or /register with no background → redirect to home */}

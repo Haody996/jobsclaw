@@ -7,11 +7,11 @@ import HelpButton from './HelpButton'
 const navItems = [
   { to: '/matches', label: 'AI Matches', icon: Sparkles, exact: false },
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, exact: false },
+  { to: '/applications', label: 'Applications', icon: FileText, exact: false },
   { to: '/profile', label: 'Profile', icon: User, exact: false },
 ]
 
 const adminNavItems = [
-  { to: '/applications', label: 'Applications', icon: FileText, exact: false },
   { to: '/admin', label: 'Admin', icon: ShieldCheck, exact: false },
 ]
 
