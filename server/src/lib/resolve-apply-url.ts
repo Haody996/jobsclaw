@@ -60,9 +60,12 @@ export async function resolveApplyUrls(
   location?: string | null,
   opts: ResolveOpts = {}
 ): Promise<string[]> {
+  // Ordered most-productive-first: a bare "title company" query reliably
+  // returns hits, while the location-qualified variant is often too narrow
+  // and returns nothing. maxQueries truncates from the front.
   const allQueries = [
-    `${title} at ${company}${location ? ' ' + location : ''}`,
     `${title} ${company}`,
+    `${title} at ${company}${location ? ' ' + location : ''}`,
     `"${company}" "${title}"`,
   ]
   const queries = allQueries.slice(0, Math.max(1, opts.maxQueries ?? 3))
@@ -121,12 +124,13 @@ export async function resolveApplyUrls(
 }
 
 // Convenience: a single best apply URL, or null. Used at sourcing time to
-// stamp each match with a usable URL. Runs a single jsearch query.
+// stamp each match with a usable URL. Runs up to 2 jsearch queries (the
+// resolver early-exits once a direct-ATS hit is found, so it's often just 1).
 export async function resolveBestApplyUrl(
   title: string,
   company: string,
   location?: string | null
 ): Promise<string | null> {
-  const urls = await resolveApplyUrls(title, company, location, { maxQueries: 1 })
+  const urls = await resolveApplyUrls(title, company, location, { maxQueries: 2 })
   return urls[0] ?? null
 }
