@@ -1,4 +1,5 @@
 import { Router, Response } from 'express'
+import { createHash } from 'crypto'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import { applyQueue } from '../lib/queue'
 import { computeMatchScore } from '../lib/keyword-match'
@@ -82,8 +83,12 @@ router.post('/quick', authMiddleware, async (req: AuthRequest, res: Response): P
     return
   }
 
-  // Upsert a Job record so the apply worker can use it
-  const externalId = `linkedin-${Buffer.from(link).toString('base64url').slice(0, 64)}`
+  // Upsert a Job record so the apply worker can use it.
+  // Use a SHA-256 hash of the link to guarantee per-URL uniqueness — the
+  // previous base64-truncated-to-64-chars scheme collided on every LinkedIn
+  // URL (they all share the 35-char `https://www.linkedin.com/jobs/view/`
+  // prefix, which fills the slice before the unique slug starts).
+  const externalId = `linkedin-${createHash('sha256').update(link).digest('hex').slice(0, 32)}`
   const job = await prisma.job.upsert({
     where: { externalId },
     update: { fetchedAt: new Date(), isEasyApply: !!isEasyApply },
@@ -99,13 +104,17 @@ router.post('/quick', authMiddleware, async (req: AuthRequest, res: Response): P
     },
   })
 
-  // Check if already applied
+  // Check for an existing application. A previous FAILED attempt should be
+  // retryable — delete it and create a fresh one. Any other status is sticky.
   const existing = await prisma.application.findFirst({
     where: { userId: req.userId!, jobId: job.id },
   })
-  if (existing) {
+  if (existing && existing.status !== 'FAILED') {
     res.status(409).json({ error: 'Already applied to this job', applicationId: existing.id, status: existing.status })
     return
+  }
+  if (existing) {
+    await prisma.application.delete({ where: { id: existing.id } })
   }
 
   const application = await prisma.application.create({

@@ -15,6 +15,7 @@ import { workdayAdapter } from '../lib/ats/workday'
 import { icimsAdapter } from '../lib/ats/icims'
 import { genericAdapter } from '../lib/ats/generic'
 import { fillCustomQuestionsWithLLM } from '../lib/ats/llm-fill'
+import { searchJobs } from '../lib/jsearch'
 import type { ATSAdapter, ApplyContext } from '../lib/ats/types'
 
 chromiumExtra.use(stealth())
@@ -46,90 +47,66 @@ async function launchBrowser(): Promise<Browser> {
   })
 }
 
-// ─── LinkedIn redirect flow ──────────────────────────────────────────────
-// For non-Easy-Apply jobs: open the LinkedIn job page (no login), click the
-// external Apply button, follow the redirect off LinkedIn, then hand off to
-// the appropriate ATS adapter for the company site.
+// ─── LinkedIn → direct ATS URL resolver ──────────────────────────────────
+// LinkedIn hides the external apply URL from logged-out scrapers (the
+// "Apply on company site" button just opens a sign-in modal). We resolve
+// the job to its real ATS URL via jsearch (a 3rd-party job API that
+// aggregates listings across LinkedIn/Indeed/ZipRecruiter/etc. and exposes
+// the direct apply link). Returns null if no matching non-LinkedIn URL
+// can be found.
 
-async function runLinkedInRedirect(
-  job: { id: string; url: string; title: string; company: string },
-  profile: ApplyContext['profile'],
-  answers: ApplyContext['answers'],
-  email: string,
-  browser: Browser
+function normalize(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+async function resolveDirectApplyUrl(
+  title: string,
+  company: string,
+  location?: string | null
 ): Promise<string | null> {
-  const context = await browser.newContext()
-  const page = await context.newPage()
-  let externalPage = page
-  try {
-    dbg('linkedin', `navigating to ${job.url}`)
-    await page.goto(job.url, { waitUntil: 'domcontentloaded', timeout: 30000 })
-    await page.waitForTimeout(2000)
+  const queries = [
+    `${title} at ${company}${location ? ' ' + location : ''}`,
+    `${title} ${company}`,
+  ]
 
-    const currentUrl = page.url()
-    if (/\/(login|authwall|checkpoint)/.test(currentUrl)) {
-      throw new Error('LinkedIn job page requires login — cannot reach Apply button without auth.')
+  const wantTitle = normalize(title)
+  const wantCompany = normalize(company)
+
+  for (const q of queries) {
+    let results: Awaited<ReturnType<typeof searchJobs>> = []
+    try {
+      results = await searchJobs({ q, num_pages: 1 })
+    } catch (err: any) {
+      console.error('[apply:jsearch] query failed:', q, '→', err?.message || err)
+      continue
+    }
+    dbg('jsearch', `query="${q}" → ${results.length} results`)
+
+    const scored = results
+      .map((j) => {
+        const t = normalize(j.job_title)
+        const c = normalize(j.employer_name)
+        const titleMatch = t === wantTitle ? 2 : (t.includes(wantTitle) || wantTitle.includes(t) ? 1 : 0)
+        const companyMatch = c === wantCompany ? 2 : (c.includes(wantCompany) || wantCompany.includes(c) ? 1 : 0)
+        return { job: j, score: titleMatch + companyMatch, titleMatch, companyMatch }
+      })
+      .filter((r) => r.companyMatch > 0 && r.titleMatch > 0)
+      .sort((a, b) => b.score - a.score)
+
+    for (const r of scored) {
+      const link = r.job.job_apply_link
+      if (!link) continue
+      if (link.includes('linkedin.com')) continue
+      dbg('jsearch', `picked: "${r.job.job_title}" @ "${r.job.employer_name}" → ${link}`)
+      return link
     }
 
-    const applySelectors = [
-      'button.jobs-apply-button:not([aria-label*="Easy"])',
-      'a.jobs-apply-button:not([aria-label*="Easy"])',
-      'button:has-text("Apply on company")',
-      'a:has-text("Apply on company")',
-      'button.jobs-apply-button',
-      'a.jobs-apply-button',
-    ]
-
-    let clicked = false
-    for (const sel of applySelectors) {
-      const btn = page.locator(sel).first()
-      if (!(await btn.isVisible({ timeout: 2000 }).catch(() => false))) continue
-      const label = (await btn.innerText().catch(() => '')).trim()
-      if (/easy apply/i.test(label)) continue
-      dbg('linkedin', `clicking external apply via "${sel}" (label="${label}")`)
-
-      const [popup] = await Promise.all([
-        context.waitForEvent('page', { timeout: 8000 }).catch(() => null),
-        btn.click({ timeout: 5000 }),
-      ])
-
-      if (popup) {
-        await popup.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => null)
-        externalPage = popup
-      } else {
-        await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => null)
-      }
-      clicked = true
-      break
+    if (scored.length > 0) {
+      dbg('jsearch', `no non-LinkedIn URL among ${scored.length} matched result(s)`)
     }
-
-    if (!clicked) {
-      throw new Error('Could not find external Apply button on LinkedIn — page may require login.')
-    }
-
-    const landedUrl = externalPage.url()
-    dbg('linkedin', `landed on ${landedUrl}`)
-    if (landedUrl.includes('linkedin.com')) {
-      throw new Error(`Apply click did not leave LinkedIn (landed: ${landedUrl}) — may be Easy Apply or login wall.`)
-    }
-
-    const adapter = getAdapter(landedUrl)
-    dbg('adapter', `using ${adapter.name} for ${landedUrl}`)
-    await adapter.apply({
-      page: externalPage,
-      job: { ...job, url: landedUrl },
-      profile,
-      email,
-      answers,
-    })
-
-    return landedUrl
-  } catch (err) {
-    await captureFailure(externalPage, job.id, 'linkedin-redirect').catch(() => null)
-    throw err
-  } finally {
-    await context.close().catch(() => null)
   }
+
+  return null
 }
 
 // ─── Indeed (may redirect to company ATS) ────────────────────────────────
@@ -311,21 +288,34 @@ async function runApply(data: ApplyJobData): Promise<void> {
       throw new Error('LinkedIn Easy Apply must be done manually — open the job on LinkedIn and submit there.')
     }
 
+    // For non-Easy-Apply LinkedIn jobs, LinkedIn's public job page hides the
+    // external apply URL behind a sign-in wall. Resolve it via jsearch first.
+    let workingUrl = job.url
+    let effectiveAts = ats
+    if (ats === 'linkedin') {
+      dbg('linkedin', `looking up direct apply URL via jsearch for "${job.title}" @ "${job.company}"`)
+      const directUrl = await resolveDirectApplyUrl(job.title, job.company, job.location)
+      if (!directUrl) {
+        throw new Error(`Could not resolve a direct apply URL for "${job.title}" at ${job.company}. The LinkedIn page requires login to reveal the external URL, and jsearch didn't return a matching non-LinkedIn link.`)
+      }
+      workingUrl = directUrl
+      effectiveAts = detectATS(workingUrl)
+      dbg('linkedin', `resolved → ats=${effectiveAts} url=${workingUrl}`)
+    }
+
     browser = await launchBrowser()
 
-    if (ats === 'linkedin') {
-      await runLinkedInRedirect(job, profile as ApplyContext['profile'], answers, user.email, browser)
-    } else if (ats === 'indeed') {
-      await runIndeedApply(job, profile as ApplyContext['profile'], answers, user.email, browser)
+    if (effectiveAts === 'indeed') {
+      await runIndeedApply({ ...job, url: workingUrl }, profile as ApplyContext['profile'], answers, user.email, browser)
     } else {
-      const adapter = getAdapter(job.url)
-      dbg('adapter', `using ${adapter.name} for ${job.url}`)
+      const adapter = getAdapter(workingUrl)
+      dbg('adapter', `using ${adapter.name} for ${workingUrl}`)
       const context = await browser.newContext()
       const page = await context.newPage()
       try {
         await adapter.apply({
           page,
-          job,
+          job: { ...job, url: workingUrl },
           profile: profile as ApplyContext['profile'],
           email: user.email,
           answers,
