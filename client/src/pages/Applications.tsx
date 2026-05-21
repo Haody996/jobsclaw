@@ -113,9 +113,9 @@ export default function Applications() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm table-fixed min-w-[760px]">
             <colgroup>
-              <col className="w-[30%]" />
+              <col className="w-[27%]" />
               <col className="w-[16%]" />
-              <col className="w-[16%]" />
+              <col className="w-[19%]" />
               <col className="w-[9%]" />
               <col className="w-[13%]" />
               <col className="w-[10%]" />
@@ -125,7 +125,7 @@ export default function Applications() {
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="text-left px-5 py-3 font-medium text-slate-600">Job</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Company</th>
-                <th className="text-left px-4 py-3 font-medium text-slate-600">Status</th>
+                <th className="text-left px-4 py-3 font-medium text-slate-600 whitespace-nowrap">Auto Apply Status</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Match</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Applied</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Update</th>
