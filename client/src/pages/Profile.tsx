@@ -1,9 +1,105 @@
 import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Upload, Plus, Trash2, FileText, CheckCircle, Mail, Send } from 'lucide-react'
+import { Upload, Plus, Trash2, FileText, CheckCircle, Mail, Send, Sparkles, ExternalLink } from 'lucide-react'
 import api from '../lib/api'
 import Spinner from '../components/ui/Spinner'
 import AutocompleteInput from '../components/ui/AutocompleteInput'
+
+function SubscriptionSection() {
+  const { data: billing, refetch } = useQuery<{
+    isPaid: boolean; isAdmin: boolean; status: string | null
+    currentPeriodEnd: string | null; hasStripeCustomer: boolean
+    freeLimit: number; paidLimit: number; configured: boolean
+  }>({
+    queryKey: ['billing-status'],
+    queryFn: async () => { const { data } = await api.get('/billing/status'); return data },
+  })
+
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  async function checkout() {
+    setBusy(true); setErr(null)
+    try {
+      const { data } = await api.post('/billing/checkout')
+      if (data?.url) window.location.href = data.url
+      else { setBusy(false); setErr('Could not start checkout') }
+    } catch (e: any) {
+      setBusy(false)
+      setErr(e?.response?.data?.error || 'Checkout failed')
+    }
+  }
+
+  async function manage() {
+    setBusy(true); setErr(null)
+    try {
+      const { data } = await api.post('/billing/portal')
+      if (data?.url) window.location.href = data.url
+      else { setBusy(false); setErr('Could not open billing portal') }
+    } catch (e: any) {
+      setBusy(false)
+      setErr(e?.response?.data?.error || 'Portal failed')
+    }
+  }
+
+  if (!billing) {
+    return (
+      <section className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+        <div className="text-sm text-slate-400">Loading subscription…</div>
+      </section>
+    )
+  }
+
+  const renews = billing.currentPeriodEnd ? new Date(billing.currentPeriodEnd).toLocaleDateString() : null
+
+  return (
+    <section className={`rounded-xl border p-6 mb-6 ${billing.isPaid
+      ? 'bg-gradient-to-br from-indigo-50 to-violet-50 border-indigo-200'
+      : 'bg-white border-slate-200'}`}>
+      <div className="flex items-center gap-2 mb-1">
+        <Sparkles className={`w-5 h-5 ${billing.isPaid ? 'text-violet-500' : 'text-amber-500'}`} />
+        <h2 className="font-semibold text-slate-900">Subscription</h2>
+      </div>
+      {billing.isAdmin ? (
+        <p className="text-sm text-slate-600 mt-2">Admin account — no limits apply.</p>
+      ) : billing.isPaid ? (
+        <>
+          <p className="text-sm text-slate-700 mt-2">
+            <span className="font-semibold text-indigo-700">JobsClaw Pro</span> · {billing.paidLimit}/day Send Now limit
+            {renews && <span className="text-slate-500"> · renews {renews}</span>}
+          </p>
+          <p className="text-xs text-slate-500 mt-0.5">Status: {billing.status ?? 'active'}</p>
+          <button
+            onClick={manage}
+            disabled={busy || !billing.configured}
+            className="mt-4 inline-flex items-center gap-1.5 px-5 py-2 border border-indigo-200 text-indigo-700 text-sm font-medium rounded-lg hover:bg-indigo-50 disabled:opacity-60 transition-colors"
+          >
+            {busy ? 'Opening…' : <>Manage subscription <ExternalLink className="w-3.5 h-3.5" /></>}
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="text-sm text-slate-600 mt-2">
+            Free plan · {billing.freeLimit} Send Now searches per day. Upgrade to JobsClaw Pro for <span className="font-semibold text-slate-900">{billing.paidLimit}/day</span>.
+          </p>
+          {!billing.configured && (
+            <p className="text-xs text-amber-600 mt-2">Billing isn't configured yet on the server — check back soon.</p>
+          )}
+          <button
+            onClick={checkout}
+            disabled={busy || !billing.configured}
+            className="mt-4 inline-flex items-center gap-1.5 px-5 py-2 bg-gradient-to-r from-amber-400 to-orange-500 text-white text-sm font-semibold rounded-lg shadow-sm hover:from-amber-500 hover:to-orange-600 active:scale-[0.98] disabled:opacity-60 transition-all duration-150"
+          >
+            {busy ? 'Loading…' : <>Upgrade to Pro <ExternalLink className="w-3.5 h-3.5" /></>}
+          </button>
+        </>
+      )}
+      {err && <p className="text-xs text-red-600 mt-2">{err}</p>}
+      {/* Keep refetch reference so the button doesn't get tree-shaken if reused */}
+      <span className="hidden" data-refetch={typeof refetch} />
+    </section>
+  )
+}
 
 const DEFAULT_QUESTIONS = [
   'Are you legally authorized to work in the US?',
@@ -293,6 +389,9 @@ export default function Profile() {
           {profileSaved ? 'Saved!' : 'Save Profile'}
         </button>
       </section>
+
+      {/* Subscription */}
+      <SubscriptionSection />
 
       {/* Daily Job Digest */}
       <section className="bg-white rounded-xl border border-slate-200 p-6 mb-6">

@@ -294,12 +294,50 @@ export default function Matches() {
   const [quotaError, setQuotaError] = useState<string | null>(null)
 
   const { data: quota } = useQuery<{
-    used: number; limit: number | null; remaining: number | null; resetAt: number | null; isAdmin: boolean
+    used: number; limit: number | null; remaining: number | null; resetAt: number | null; isAdmin: boolean; isPaid: boolean
   }>({
     queryKey: ['searchQuota'],
     enabled: authed,
     queryFn: async () => { const { data } = await api.get('/preferences/quota'); return data },
   })
+
+  const [upgrading, setUpgrading] = useState(false)
+  const [billingMsg, setBillingMsg] = useState<{ kind: 'success' | 'cancel'; text: string } | null>(null)
+
+  // Stripe Checkout redirects back here with ?billing=success|cancel. Refresh
+  // the quota (now reflects the new subscription) and surface a banner.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const b = params.get('billing')
+    if (!b) return
+    if (b === 'success') {
+      setBillingMsg({ kind: 'success', text: 'Subscription active! Enjoy your higher daily limit.' })
+      queryClient.invalidateQueries({ queryKey: ['searchQuota'] })
+    } else if (b === 'cancel') {
+      setBillingMsg({ kind: 'cancel', text: 'Checkout canceled — you can upgrade any time.' })
+    }
+    // Strip the param from the URL without a reload.
+    const url = new URL(window.location.href)
+    url.searchParams.delete('billing')
+    window.history.replaceState({}, '', url.toString())
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function startUpgrade() {
+    setUpgrading(true)
+    try {
+      const { data } = await api.post('/billing/checkout')
+      if (data?.url) {
+        window.location.href = data.url
+      } else {
+        setUpgrading(false)
+        setQuotaError('Could not start checkout')
+      }
+    } catch (err: any) {
+      setUpgrading(false)
+      setQuotaError(err?.response?.data?.error || 'Could not start checkout')
+    }
+  }
 
   const triggerDigest = useMutation({
     mutationFn: async () => { await api.put('/preferences', prefForm); return api.post('/preferences/trigger') },
@@ -408,6 +446,25 @@ export default function Matches() {
         )}
       </div>
 
+      {/* Billing redirect banner */}
+      {billingMsg && (
+        <div className={`mb-5 rounded-xl p-4 flex items-start justify-between gap-3 border ${
+          billingMsg.kind === 'success'
+            ? 'bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200'
+            : 'bg-slate-50 border-slate-200'
+        }`}>
+          <div className="flex items-center gap-2 text-sm">
+            {billingMsg.kind === 'success' ? <CheckCircle className="w-4 h-4 text-emerald-600" /> : <Mail className="w-4 h-4 text-slate-400" />}
+            <span className={billingMsg.kind === 'success' ? 'text-emerald-800 font-medium' : 'text-slate-600'}>
+              {billingMsg.text}
+            </span>
+          </div>
+          <button onClick={() => setBillingMsg(null)} className="text-slate-400 hover:text-slate-600 flex-shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Guest trial banner */}
       {!authed && (
         <div className="mb-5 bg-gradient-to-r from-indigo-50 via-violet-50 to-purple-50 border border-indigo-200 rounded-xl p-4 flex items-start gap-3">
@@ -447,16 +504,29 @@ export default function Matches() {
                 {isRunning ? 'Running…' : 'Send Now'}
               </button>
               {quota && !quota.isAdmin && quota.limit != null && (
-                <span
-                  className={`text-xs font-medium px-2.5 py-1 rounded-full border ${
-                    quota.remaining === 0 ? 'bg-red-50 text-red-700 border-red-200'
-                    : (quota.remaining ?? 0) === 1 ? 'bg-amber-50 text-amber-700 border-amber-200'
-                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  }`}
-                  title={quota.remaining === 0 ? `Resets in ${formatResetIn(quota.resetAt)}` : ''}
-                >
-                  {quota.remaining}/{quota.limit} left today
-                </span>
+                <>
+                  <span
+                    className={`text-xs font-medium px-2.5 py-1 rounded-full border ${
+                      quota.remaining === 0 ? 'bg-red-50 text-red-700 border-red-200'
+                      : (quota.remaining ?? 0) === 1 ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : quota.isPaid ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    }`}
+                    title={quota.remaining === 0 ? `Resets in ${formatResetIn(quota.resetAt)}` : ''}
+                  >
+                    {quota.isPaid && <span className="mr-1">✦</span>}
+                    {quota.remaining}/{quota.limit} left today
+                  </span>
+                  {quota.remaining === 0 && !quota.isPaid && (
+                    <button
+                      onClick={startUpgrade}
+                      disabled={upgrading}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-amber-400 to-orange-500 text-white shadow-sm hover:from-amber-500 hover:to-orange-600 active:scale-[0.97] transition-all duration-150 disabled:opacity-60"
+                    >
+                      {upgrading ? 'Loading…' : 'Upgrade for unlimited →'}
+                    </button>
+                  )}
+                </>
               )}
             </>
           ) : (

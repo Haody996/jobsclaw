@@ -8,17 +8,21 @@ datasource db {
 }
 
 model User {
-  id           String        @id @default(cuid())
-  email        String        @unique
-  password     String?
-  isAdmin      Boolean       @default(false)
-  createdAt    DateTime      @default(now())
-  profile      Profile?
-  answers      CommonAnswer[]
-  applications Application[]
-  preference   JobPreference?
-  matchHistory JobMatchHistory[]
-  helpRequests HelpRequest[]
+  id                            String        @id @default(cuid())
+  email                         String        @unique
+  password                      String?
+  isAdmin                       Boolean       @default(false)
+  createdAt                     DateTime      @default(now())
+  stripeCustomerId              String?       @unique
+  subscriptionStatus            String?       // 'active' | 'trialing' | 'past_due' | 'canceled' | null
+  subscriptionId                String?
+  subscriptionCurrentPeriodEnd  DateTime?
+  profile                       Profile?
+  answers                       CommonAnswer[]
+  applications                  Application[]
+  preference                    JobPreference?
+  matchHistory                  JobMatchHistory[]
+  helpRequests                  HelpRequest[]
 }
 
 model Profile {

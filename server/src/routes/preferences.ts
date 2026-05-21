@@ -2,7 +2,8 @@ import { Router } from 'express'
 import { authMiddleware, AuthRequest } from '../middleware/auth'
 import prisma from '../lib/prisma'
 import { scheduleUserDigest, unscheduleUserDigest, sourcingQueue } from '../scheduler'
-import { consumeSearch, getQuota, SEARCH_LIMIT } from '../lib/search-quota'
+import { consumeSearch, getQuota } from '../lib/search-quota'
+import { FREE_DAILY_LIMIT, PAID_DAILY_LIMIT, isPaidStatus } from '../lib/stripe'
 
 const router = Router()
 
@@ -82,13 +83,18 @@ router.get('/trigger/guest/:jobId', async (req, res) => {
 // GET /api/preferences/quota — daily search quota for the current user
 router.get('/quota', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.userId! }, select: { isAdmin: true } })
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId! },
+      select: { isAdmin: true, subscriptionStatus: true },
+    })
     if (user?.isAdmin) {
-      res.json({ used: 0, limit: null, remaining: null, resetAt: null, isAdmin: true })
+      res.json({ used: 0, limit: null, remaining: null, resetAt: null, isAdmin: true, isPaid: false })
       return
     }
-    const status = await getQuota(req.userId!)
-    res.json({ ...status, isAdmin: false })
+    const isPaid = isPaidStatus(user?.subscriptionStatus)
+    const limit = isPaid ? PAID_DAILY_LIMIT : FREE_DAILY_LIMIT
+    const status = await getQuota(req.userId!, limit)
+    res.json({ ...status, isAdmin: false, isPaid })
   } catch {
     res.status(500).json({ error: 'Failed to get quota' })
   }
@@ -97,13 +103,21 @@ router.get('/quota', authMiddleware, async (req: AuthRequest, res) => {
 // POST /api/preferences/trigger — queue an immediate digest, return jobId for polling
 router.post('/trigger', authMiddleware, async (req: AuthRequest, res) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.userId! }, select: { isAdmin: true } })
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId! },
+      select: { isAdmin: true, subscriptionStatus: true },
+    })
     if (!user?.isAdmin) {
-      const denied = await consumeSearch(req.userId!)
+      const isPaid = isPaidStatus(user?.subscriptionStatus)
+      const limit = isPaid ? PAID_DAILY_LIMIT : FREE_DAILY_LIMIT
+      const denied = await consumeSearch(req.userId!, limit)
       if (denied) {
         res.status(429).json({
-          error: `Daily search limit reached (${SEARCH_LIMIT}/day)`,
+          error: isPaid
+            ? `Daily search limit reached (${limit}/day) — contact support if you need more.`
+            : `Daily search limit reached (${limit}/day). Upgrade for ${PAID_DAILY_LIMIT}/day.`,
           ...denied,
+          isPaid,
         })
         return
       }

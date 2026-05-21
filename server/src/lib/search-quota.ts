@@ -4,7 +4,6 @@ import { connection } from './queue'
 const redis = new Redis(connection)
 
 const WINDOW_MS = 24 * 60 * 60 * 1000
-export const SEARCH_LIMIT = 3
 
 export interface QuotaStatus {
   used: number
@@ -17,7 +16,7 @@ function key(userId: string) {
   return `search_count:${userId}`
 }
 
-export async function getQuota(userId: string): Promise<QuotaStatus> {
+export async function getQuota(userId: string, limit: number): Promise<QuotaStatus> {
   const k = key(userId)
   const now = Date.now()
   await redis.zremrangebyscore(k, '-inf', now - WINDOW_MS)
@@ -29,14 +28,14 @@ export async function getQuota(userId: string): Promise<QuotaStatus> {
   const oldestTs = oldest.length === 2 ? Number(oldest[1]) : null
   return {
     used,
-    limit: SEARCH_LIMIT,
-    remaining: Math.max(0, SEARCH_LIMIT - used),
+    limit,
+    remaining: Math.max(0, limit - used),
     resetAt: oldestTs ? oldestTs + WINDOW_MS : null,
   }
 }
 
-export async function consumeSearch(userId: string): Promise<QuotaStatus | null> {
-  const status = await getQuota(userId)
+export async function consumeSearch(userId: string, limit: number): Promise<QuotaStatus | null> {
+  const status = await getQuota(userId, limit)
   if (status.remaining <= 0) return status
   const now = Date.now()
   await redis.zadd(key(userId), now, `${now}-${Math.random().toString(36).slice(2, 8)}`)

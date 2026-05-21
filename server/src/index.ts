@@ -12,12 +12,18 @@ import preferencesRoutes from './routes/preferences'
 import matchesRoutes from './routes/matches'
 import adminRoutes from './routes/admin'
 import helpRoutes from './routes/help'
+import billingRoutes, { handleStripeWebhook } from './routes/billing'
 import { initScheduler } from './scheduler'
 
 const app = express()
 const PORT = process.env.PORT || 3001
 
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }))
+
+// Stripe webhook MUST receive the raw body so the signature can be verified.
+// Mount it BEFORE express.json() so the body parser doesn't consume the stream.
+app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook)
+
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
@@ -34,6 +40,7 @@ app.use('/api/preferences', preferencesRoutes)
 app.use('/api/matches', matchesRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/help', helpRoutes)
+app.use('/api/billing', billingRoutes)
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }))
 
