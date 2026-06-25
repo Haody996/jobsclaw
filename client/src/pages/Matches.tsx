@@ -23,17 +23,26 @@ interface JobMatch {
 
 // Mirror of server-side classifyTier(), used as a fallback for older matches
 // in JobMatchHistory that were created before applyTier was stamped.
-const DIRECT_ATS_HOSTS = ['greenhouse.io', 'boards.greenhouse', 'lever.co', 'ashbyhq.com', 'myworkdayjobs.com', 'icims.com']
+const DIRECT_ATS_HOSTS = [
+  'greenhouse.io', 'boards.greenhouse', 'job-boards.greenhouse',
+  'lever.co', 'ashbyhq.com', 'myworkdayjobs.com', 'icims.com',
+  'jobvite.com', 'smartrecruiters.com', 'recruitee.com', 'breezy.hr',
+  'successfactors.com', 'taleo.net', 'brassring.com',
+]
 const AGGREGATOR_HOSTS = ['builtin.com', 'wellfound.com', 'otta.com', 'welcometothejungle.com']
 const BOT_HOSTS = ['ziprecruiter.com', 'glassdoor.com', 'monster.com', 'simplyhired.com']
+const NO_FORM_HOSTS = ['jobilize.com', 'learn4good.com']
 function classifyTierClient(url: string | null | undefined): ApplyTier {
   if (!url) return 'unsupported'
   if (url.includes('linkedin.com')) return 'unsupported'
+  if (BOT_HOSTS.some((h) => url.includes(h))) return 'unsupported'
+  if (NO_FORM_HOSTS.some((h) => url.includes(h))) return 'unsupported'
   if (DIRECT_ATS_HOSTS.some((h) => url.includes(h))) return 'ready'
   if (AGGREGATOR_HOSTS.some((h) => url.includes(h))) return 'maybe'
-  if (BOT_HOSTS.some((h) => url.includes(h))) return 'unsupported'
   if (url.includes('indeed.com')) return 'maybe'
-  return 'unsupported'
+  // Unknown company host — let the user try. The worker pre-flight refuses
+  // to submit a non-application form, so a wrong guess fails clearly.
+  return 'maybe'
 }
 function effectiveTier(job: JobMatch): ApplyTier {
   return job.applyTier ?? classifyTierClient(job.applyUrl)

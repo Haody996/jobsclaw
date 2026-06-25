@@ -33,10 +33,25 @@ function normalizeCompany(s: string): string {
   return n
 }
 
-// Sites we cannot get past without a real session (Cloudflare/captcha/login).
+// Sites we cannot get past without a real session (Cloudflare/captcha/login)
+// OR sites we've directly tested as pure listing pages with no application form.
 const BOT_PROTECTED_HOSTS = ['ziprecruiter.com', 'glassdoor.com', 'monster.com', 'simplyhired.com']
-// Known ATS hosts our adapters can actually fill — highest priority.
-const DIRECT_ATS_HOSTS = ['greenhouse.io', 'boards.greenhouse', 'lever.co', 'ashbyhq.com', 'myworkdayjobs.com', 'icims.com']
+const NO_FORM_HOSTS = ['jobilize.com', 'learn4good.com']
+// Known ATS hosts our adapters (or the generic adapter) can fill reliably.
+const DIRECT_ATS_HOSTS = [
+  'greenhouse.io', 'boards.greenhouse', 'job-boards.greenhouse',
+  'lever.co',
+  'ashbyhq.com',
+  'myworkdayjobs.com',
+  'icims.com',
+  'jobvite.com',
+  'smartrecruiters.com',
+  'recruitee.com',
+  'breezy.hr',
+  'successfactors.com',
+  'taleo.net',
+  'brassring.com',
+]
 
 function urlScore(link: string): number {
   if (!link) return -100
@@ -54,18 +69,25 @@ const AGGREGATOR_HOSTS = ['builtin.com', 'wellfound.com', 'otta.com', 'welcometo
 export type ApplyTier = 'ready' | 'maybe' | 'unsupported'
 
 /** Classify a resolved apply URL into a confidence tier that the UI uses
- *  to decide whether to offer Auto Apply for the match. */
+ *  to decide whether to offer Auto Apply for the match.
+ *  - ready: known ATS host where the generic adapter reliably works
+ *  - maybe: aggregator we can unwrap, Indeed, or unknown company host
+ *           (worker will try and either succeed or fail with a clear error)
+ *  - unsupported: no URL at all, LinkedIn, known bot-walled, or known
+ *           pure-listing aggregator (we've verified there's no form to fill) */
 export function classifyTier(url: string | null | undefined): ApplyTier {
   if (!url) return 'unsupported'
   if (url.includes('linkedin.com')) return 'unsupported'
+  if (BOT_PROTECTED_HOSTS.some((h) => url.includes(h))) return 'unsupported'
+  if (NO_FORM_HOSTS.some((h) => url.includes(h))) return 'unsupported'
   if (DIRECT_ATS_HOSTS.some((h) => url.includes(h))) return 'ready'
   if (AGGREGATOR_HOSTS.some((h) => url.includes(h))) return 'maybe'
-  if (BOT_PROTECTED_HOSTS.some((h) => url.includes(h))) return 'unsupported'
-  // Indeed has a dedicated flow but is often Cloudflare-gated — call it maybe.
   if (url.includes('indeed.com')) return 'maybe'
-  // Anything else (random company SPA, niche aggregator, etc.) — generic
-  // adapter has near-zero success on those. Be honest.
-  return 'unsupported'
+  // Unknown host — let the user try. Many company-direct careers pages
+  // (careers.acme.com) are Workday/Greenhouse-skinned and our generic
+  // adapter has a chance. The worker's pre-flight will refuse to submit
+  // a non-application form, so a wrong guess fails honestly.
+  return 'maybe'
 }
 
 interface ResolveOpts {
