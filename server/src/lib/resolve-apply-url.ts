@@ -52,6 +52,12 @@ interface ResolveOpts {
   maxQueries?: number
 }
 
+/** Distinguishable failure reason when no candidates surface — lets callers
+ *  surface a clear error instead of the generic "no usable link". */
+export class ResolveQuotaExhausted extends Error {
+  constructor() { super('jsearch quota exhausted (HTTP 429) — Auto Apply URL resolution is unavailable until the API quota resets or the plan is upgraded.') }
+}
+
 // Returns a ranked list of candidate apply URLs (best first), excluding
 // LinkedIn and fully bot-protected hosts.
 export async function resolveApplyUrls(
@@ -76,12 +82,17 @@ export async function resolveApplyUrls(
   type Candidate = { link: string; publisher: string; isDirect: boolean; matchScore: number }
   const seen = new Set<string>()
   const candidates: Candidate[] = []
+  let queriesRan = 0
+  let queriesRateLimited = 0
 
   for (const q of queries) {
     let results: Awaited<ReturnType<typeof searchJobs>> = []
     try {
       results = await searchJobs({ q, num_pages: 1 })
+      queriesRan++
     } catch (err: any) {
+      const status = err?.response?.status
+      if (status === 429) queriesRateLimited++
       console.error(`${LOG} query failed:`, q, '→', err?.message || err)
       continue
     }
@@ -111,7 +122,12 @@ export async function resolveApplyUrls(
     if (candidates.some((c) => urlScore(c.link) >= 100)) break
   }
 
-  if (candidates.length === 0) return []
+  if (candidates.length === 0) {
+    // If every query 429'd, surface that distinctly so the caller can show
+    // a "quota exhausted" message instead of "no data".
+    if (queriesRan === 0 && queriesRateLimited > 0) throw new ResolveQuotaExhausted()
+    return []
+  }
 
   const ranked = candidates
     .map((c) => ({ ...c, total: urlScore(c.link) + (c.isDirect ? 50 : 0) + c.matchScore * 5 }))

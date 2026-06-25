@@ -15,7 +15,7 @@ import { workdayAdapter } from '../lib/ats/workday'
 import { icimsAdapter } from '../lib/ats/icims'
 import { genericAdapter } from '../lib/ats/generic'
 import { fillCustomQuestionsWithLLM } from '../lib/ats/llm-fill'
-import { resolveApplyUrls } from '../lib/resolve-apply-url'
+import { resolveApplyUrls, ResolveQuotaExhausted } from '../lib/resolve-apply-url'
 import type { ATSAdapter, ApplyContext } from '../lib/ats/types'
 
 chromiumExtra.use(stealth())
@@ -319,9 +319,22 @@ async function runApply(data: ApplyJobData): Promise<void> {
         candidateUrls.push(job.applyUrl)
       }
       dbg('linkedin', `live jsearch lookup for "${job.title}" @ "${job.company}"`)
-      const live = await resolveApplyUrls(job.title, job.company, job.location)
-      for (const u of live) {
-        if (!candidateUrls.includes(u)) candidateUrls.push(u)
+      try {
+        const live = await resolveApplyUrls(job.title, job.company, job.location)
+        for (const u of live) {
+          if (!candidateUrls.includes(u)) candidateUrls.push(u)
+        }
+      } catch (err: any) {
+        if (err instanceof ResolveQuotaExhausted) {
+          // Live resolution unavailable. If we have a pre-resolved URL we can
+          // still try it; otherwise we have to fail with a clear quota message.
+          if (candidateUrls.length === 0) {
+            throw new Error(`Auto Apply URL lookup is temporarily unavailable (jsearch quota exhausted). Please apply to "${job.title}" at ${job.company} manually via the LinkedIn link, or try again after the API quota resets.`)
+          }
+          dbg('linkedin', `jsearch quota exhausted; falling back to ${candidateUrls.length} pre-resolved URL(s)`)
+        } else {
+          throw err
+        }
       }
       if (candidateUrls.length === 0) {
         throw new Error(`Could not resolve a direct apply URL for "${job.title}" at ${job.company}. LinkedIn hides the external URL behind a login wall and jsearch returned no usable non-LinkedIn link — please apply manually.`)
