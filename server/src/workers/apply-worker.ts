@@ -308,32 +308,39 @@ async function runApply(data: ApplyJobData): Promise<void> {
 
     // For non-Easy-Apply LinkedIn jobs, LinkedIn's public job page hides the
     // external apply URL behind a sign-in wall. The sourcing worker already
-    // resolves and stamps a real apply URL onto each match (job.applyUrl);
-    // use it first, then fall back to a live jsearch lookup for more
-    // candidates. The worker tries each in ranked order.
+    // classifies + stamps the match (applyUrl + applyTier):
+    //   - tier=ready: applyUrl points to a known ATS. Use it directly; do NOT
+    //     burn a jsearch lookup at apply time — it's not needed and we'd
+    //     waste quota on every retry.
+    //   - tier=maybe / no tier: try the pre-resolved URL plus a live lookup
+    //     for fallback candidates.
+    //   - tier=unsupported: route never reaches here (the /quick endpoint
+    //     rejects with 400 and the UI hides the Auto Apply button).
     let candidateUrls: string[]
     if (ats === 'linkedin') {
       candidateUrls = []
       if (job.applyUrl && !job.applyUrl.includes('linkedin.com')) {
-        dbg('linkedin', `using pre-resolved applyUrl from match: ${job.applyUrl}`)
+        dbg('linkedin', `using pre-resolved applyUrl (tier=${job.applyTier ?? '?'}): ${job.applyUrl}`)
         candidateUrls.push(job.applyUrl)
       }
-      dbg('linkedin', `live jsearch lookup for "${job.title}" @ "${job.company}"`)
-      try {
-        const live = await resolveApplyUrls(job.title, job.company, job.location)
-        for (const u of live) {
-          if (!candidateUrls.includes(u)) candidateUrls.push(u)
-        }
-      } catch (err: any) {
-        if (err instanceof ResolveQuotaExhausted) {
-          // Live resolution unavailable. If we have a pre-resolved URL we can
-          // still try it; otherwise we have to fail with a clear quota message.
-          if (candidateUrls.length === 0) {
-            throw new Error(`Auto Apply URL lookup is temporarily unavailable (jsearch quota exhausted). Please apply to "${job.title}" at ${job.company} manually via the LinkedIn link, or try again after the API quota resets.`)
+      if (job.applyTier === 'ready' && candidateUrls.length > 0) {
+        dbg('linkedin', `tier=ready — skipping live jsearch fallback`)
+      } else {
+        dbg('linkedin', `live jsearch lookup for "${job.title}" @ "${job.company}"`)
+        try {
+          const live = await resolveApplyUrls(job.title, job.company, job.location)
+          for (const u of live) {
+            if (!candidateUrls.includes(u)) candidateUrls.push(u)
           }
-          dbg('linkedin', `jsearch quota exhausted; falling back to ${candidateUrls.length} pre-resolved URL(s)`)
-        } else {
-          throw err
+        } catch (err: any) {
+          if (err instanceof ResolveQuotaExhausted) {
+            if (candidateUrls.length === 0) {
+              throw new Error(`Auto Apply URL lookup is temporarily unavailable (jsearch quota exhausted). Please apply to "${job.title}" at ${job.company} manually via the LinkedIn link, or try again after the API quota resets.`)
+            }
+            dbg('linkedin', `jsearch quota exhausted; falling back to ${candidateUrls.length} pre-resolved URL(s)`)
+          } else {
+            throw err
+          }
         }
       }
       if (candidateUrls.length === 0) {

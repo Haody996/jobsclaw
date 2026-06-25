@@ -47,6 +47,27 @@ function urlScore(link: string): number {
   return 10 // unknown host, prefer over bot-protected/indeed but below direct ATS
 }
 
+// Aggregators whose page embeds the actual ATS URL in an Apply-Now anchor.
+// At apply time the worker follows that link to the real form.
+const AGGREGATOR_HOSTS = ['builtin.com', 'wellfound.com', 'otta.com', 'welcometothejungle.com']
+
+export type ApplyTier = 'ready' | 'maybe' | 'unsupported'
+
+/** Classify a resolved apply URL into a confidence tier that the UI uses
+ *  to decide whether to offer Auto Apply for the match. */
+export function classifyTier(url: string | null | undefined): ApplyTier {
+  if (!url) return 'unsupported'
+  if (url.includes('linkedin.com')) return 'unsupported'
+  if (DIRECT_ATS_HOSTS.some((h) => url.includes(h))) return 'ready'
+  if (AGGREGATOR_HOSTS.some((h) => url.includes(h))) return 'maybe'
+  if (BOT_PROTECTED_HOSTS.some((h) => url.includes(h))) return 'unsupported'
+  // Indeed has a dedicated flow but is often Cloudflare-gated — call it maybe.
+  if (url.includes('indeed.com')) return 'maybe'
+  // Anything else (random company SPA, niche aggregator, etc.) — generic
+  // adapter has near-zero success on those. Be honest.
+  return 'unsupported'
+}
+
 interface ResolveOpts {
   /** How many jsearch query variants to run (default 3). Sourcing uses 1 to limit API spend. */
   maxQueries?: number

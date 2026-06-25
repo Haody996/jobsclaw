@@ -61,6 +61,7 @@ model Job {
   description  String
   url          String
   applyUrl     String?
+  applyTier    String?       // 'ready' | 'maybe' | 'unsupported' (see resolve-apply-url.ts)
   source       String
   salary       String?
   jobType      String?

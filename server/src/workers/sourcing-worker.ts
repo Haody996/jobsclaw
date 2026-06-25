@@ -6,7 +6,7 @@ import { scrapeLinkedInJobs } from '../lib/scrape-linkedin'
 import { scrapeTheMuseJobs, scrapeArbeitnowJobs } from '../lib/scrape-indeed'
 import { matchJobsToResume } from '../lib/match-jobs-llm'
 import { sendDigestEmail } from '../lib/send-email'
-import { resolveBestApplyUrl } from '../lib/resolve-apply-url'
+import { resolveBestApplyUrl, classifyTier } from '../lib/resolve-apply-url'
 import type { ScrapedJob } from '../lib/scrape-linkedin'
 import type { JobMatch, MatchSection } from '../lib/match-jobs-llm'
 
@@ -47,20 +47,30 @@ async function scrapeForKeywords(keywords: string, location: string, fetchCount:
   })
 }
 
-// Stamp each match with a real, fillable apply URL so Auto Apply doesn't have
-// to resolve it later. Non-LinkedIn sources (The Muse, Arbeitnow) already link
-// straight to the company's apply page; LinkedIn links are resolved via jsearch.
+// Stamp each match with (a) a real, fillable apply URL and (b) a confidence
+// tier so the UI can offer Auto Apply only on jobs that are likely to succeed.
+//   ready       — known ATS host (Greenhouse/Lever/Ashby/Workday/iCIMS)
+//   maybe       — known aggregator we can unwrap (Built In etc.) or Indeed
+//   unsupported — anything else (no URL, custom company SPA, Cloudflare-gated)
 async function stampApplyUrls(matches: JobMatch[]): Promise<void> {
   for (const m of matches) {
     if (!m.link.includes('linkedin.com')) {
+      // Muse / Arbeitnow / etc. — the scraped link IS the apply page.
       m.applyUrl = m.link
+      m.applyTier = classifyTier(m.link)
       continue
     }
     try {
       const url = await resolveBestApplyUrl(m.title, m.company, m.location)
-      if (url) m.applyUrl = url
+      if (url) {
+        m.applyUrl = url
+        m.applyTier = classifyTier(url)
+      } else {
+        m.applyTier = 'unsupported'
+      }
     } catch (err: any) {
       console.warn(`[sourcing-worker] applyUrl resolve failed for "${m.title}" @ "${m.company}": ${err?.message || err}`)
+      m.applyTier = 'unsupported'
     }
   }
 }

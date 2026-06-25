@@ -7,6 +7,8 @@ import { isAuthenticated, isAdmin, getToken } from '../lib/auth'
 import Spinner from '../components/ui/Spinner'
 import AutocompleteInput from '../components/ui/AutocompleteInput'
 
+type ApplyTier = 'ready' | 'maybe' | 'unsupported'
+
 interface JobMatch {
   company: string
   title: string
@@ -16,6 +18,25 @@ interface JobMatch {
   compatibility_score?: number
   isEasyApply?: boolean
   applyUrl?: string
+  applyTier?: ApplyTier
+}
+
+// Mirror of server-side classifyTier(), used as a fallback for older matches
+// in JobMatchHistory that were created before applyTier was stamped.
+const DIRECT_ATS_HOSTS = ['greenhouse.io', 'boards.greenhouse', 'lever.co', 'ashbyhq.com', 'myworkdayjobs.com', 'icims.com']
+const AGGREGATOR_HOSTS = ['builtin.com', 'wellfound.com', 'otta.com', 'welcometothejungle.com']
+const BOT_HOSTS = ['ziprecruiter.com', 'glassdoor.com', 'monster.com', 'simplyhired.com']
+function classifyTierClient(url: string | null | undefined): ApplyTier {
+  if (!url) return 'unsupported'
+  if (url.includes('linkedin.com')) return 'unsupported'
+  if (DIRECT_ATS_HOSTS.some((h) => url.includes(h))) return 'ready'
+  if (AGGREGATOR_HOSTS.some((h) => url.includes(h))) return 'maybe'
+  if (BOT_HOSTS.some((h) => url.includes(h))) return 'unsupported'
+  if (url.includes('indeed.com')) return 'maybe'
+  return 'unsupported'
+}
+function effectiveTier(job: JobMatch): ApplyTier {
+  return job.applyTier ?? classifyTierClient(job.applyUrl)
 }
 
 interface MatchSection {
@@ -66,6 +87,7 @@ function QuickApplyButton({ job, adminMode }: { job: JobMatch; adminMode: boolea
           location: job.location,
           isEasyApply: !!job.isEasyApply,
           applyUrl: job.applyUrl,
+          applyTier: effectiveTier(job),
         }),
       })
       if (res.status === 409) {
@@ -94,54 +116,77 @@ function QuickApplyButton({ job, adminMode }: { job: JobMatch; adminMode: boolea
         </span>
       )}
 
-      {adminMode && !job.isEasyApply ? (
-        <div className="flex flex-col items-end gap-1">
-          {autoState === 'queued' ? (
+      {(() => {
+        // Decide which CTA to render.
+        // Non-admins and Easy-Apply jobs always get the manual link.
+        // Admins on non-Easy-Apply jobs get Auto Apply only when the match is
+        // auto-appliable per its tier: 'ready' (violet) or 'maybe' (amber).
+        // 'unsupported' falls back to the manual link — no false promises.
+        const tier = effectiveTier(job)
+        const canAuto = adminMode && !job.isEasyApply && tier !== 'unsupported'
+        if (!canAuto) {
+          return (
             <a
-              href="/applications"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
-              title="View progress in Applications"
+              href={job.link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 !text-white text-sm font-medium rounded-lg hover:from-indigo-700 hover:to-violet-700 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-150"
+              title={
+                job.isEasyApply ? 'LinkedIn Easy Apply — apply directly on LinkedIn'
+                : adminMode ? 'This job has no auto-appliable form — apply manually'
+                : undefined
+              }
             >
-              <CheckCircle className="w-3.5 h-3.5" />
-              Queued — view
+              <ExternalLink className="w-3.5 h-3.5" />
+              {job.isEasyApply ? 'Apply on LinkedIn' : 'Apply'}
             </a>
-          ) : (
-            <button
-              onClick={handleAutoApply}
-              disabled={autoState === 'loading'}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-medium rounded-lg hover:from-violet-700 hover:to-purple-700 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {autoState === 'loading' ? (
-                <>
-                  <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                  </svg>
-                  Queuing…
-                </>
-              ) : (
-                <>
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/><path d="M21 3l-6 6"/><path d="M21 9V3h-6"/></svg>
-                  Auto Apply
-                </>
-              )}
-            </button>
-          )}
-          {autoState === 'error' && (
-            <span className="text-xs text-red-500 max-w-[140px] text-right">{errorMsg}</span>
-          )}
-        </div>
-      ) : (
-        <a
-          href={job.link}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-indigo-600 to-violet-600 !text-white text-sm font-medium rounded-lg hover:from-indigo-700 hover:to-violet-700 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-150"
-        >
-          <ExternalLink className="w-3.5 h-3.5" />
-          {job.isEasyApply ? 'Apply on LinkedIn' : 'Apply'}
-        </a>
-      )}
+          )
+        }
+        const isMaybe = tier === 'maybe'
+        return (
+          <div className="flex flex-col items-end gap-1">
+            {autoState === 'queued' ? (
+              <a
+                href="/applications"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                title="View progress in Applications"
+              >
+                <CheckCircle className="w-3.5 h-3.5" />
+                Queued — view
+              </a>
+            ) : (
+              <button
+                onClick={handleAutoApply}
+                disabled={autoState === 'loading'}
+                title={isMaybe ? 'Best-effort Auto Apply — page may need manual review' : 'Auto Apply via supported ATS'}
+                className={`inline-flex items-center gap-1.5 px-4 py-2 text-white text-sm font-medium rounded-lg shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed ${
+                  isMaybe
+                    ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600'
+                    : 'bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700'
+                }`}
+              >
+                {autoState === 'loading' ? (
+                  <>
+                    <svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                    </svg>
+                    Queuing…
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/><path d="M21 3l-6 6"/><path d="M21 9V3h-6"/></svg>
+                    {isMaybe ? 'Try Auto Apply' : 'Auto Apply'}
+                  </>
+                )}
+              </button>
+            )}
+            {autoState === 'error' && (
+              <span className="text-xs text-red-500 max-w-[180px] text-right">{errorMsg}</span>
+            )}
+          </div>
+        )
+      })()}
     </div>
   )
 }

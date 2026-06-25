@@ -70,7 +70,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response): Promis
 
 // POST /api/apply/quick — one-click apply from AI match (no existing Job record needed)
 router.post('/quick', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
-  const { title, company, link, location, isEasyApply, applyUrl, skipQueue } = req.body
+  const { title, company, link, location, isEasyApply, applyUrl, applyTier, skipQueue } = req.body
 
   if (!link) {
     res.status(400).json({ error: 'Job link is required' })
@@ -86,6 +86,15 @@ router.post('/quick', authMiddleware, async (req: AuthRequest, res: Response): P
   // applyUrl is the real, fillable apply URL the sourcing worker resolved for
   // this match — pass it through so the apply worker can skip re-resolving.
   const directUrl = typeof applyUrl === 'string' && applyUrl ? applyUrl : null
+  const tier = ['ready', 'maybe', 'unsupported'].includes(applyTier) ? applyTier as string : null
+
+  // Refuse Auto Apply on jobs the UI shouldn't have offered it for. This is
+  // belt-and-braces — the Matches page hides the Auto Apply button for
+  // unsupported tiers, but a tampered request shouldn't waste a worker run.
+  if (tier === 'unsupported') {
+    res.status(400).json({ error: 'Auto Apply is not supported for this job — please apply manually.' })
+    return
+  }
 
   // Upsert a Job record so the apply worker can use it.
   // Use a SHA-256 hash of the link to guarantee per-URL uniqueness — the
@@ -95,7 +104,12 @@ router.post('/quick', authMiddleware, async (req: AuthRequest, res: Response): P
   const externalId = `linkedin-${createHash('sha256').update(link).digest('hex').slice(0, 32)}`
   const job = await prisma.job.upsert({
     where: { externalId },
-    update: { fetchedAt: new Date(), isEasyApply: !!isEasyApply, ...(directUrl ? { applyUrl: directUrl } : {}) },
+    update: {
+      fetchedAt: new Date(),
+      isEasyApply: !!isEasyApply,
+      ...(directUrl ? { applyUrl: directUrl } : {}),
+      ...(tier ? { applyTier: tier } : {}),
+    },
     create: {
       externalId,
       title: title || 'Unknown',
@@ -104,6 +118,7 @@ router.post('/quick', authMiddleware, async (req: AuthRequest, res: Response): P
       description: '',
       url: link,
       applyUrl: directUrl,
+      applyTier: tier,
       source: 'linkedin',
       isEasyApply: !!isEasyApply,
     },

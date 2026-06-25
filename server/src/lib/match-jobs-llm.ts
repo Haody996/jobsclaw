@@ -11,6 +11,11 @@ export interface JobMatch {
   isEasyApply?: boolean
   /** Real, fillable apply URL resolved via jsearch at sourcing time. */
   applyUrl?: string
+  /** Confidence tier for Auto Apply — drives the UI CTA.
+   *  'ready'        = applyUrl host is a known ATS, will work
+   *  'maybe'        = applyUrl is an unwrappable aggregator (Built In etc.)
+   *  'unsupported'  = no usable URL, custom SPA, Cloudflare host, etc. */
+  applyTier?: 'ready' | 'maybe' | 'unsupported'
 }
 
 export interface MatchSection {
